@@ -239,8 +239,7 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
             imageURI:    tpl.imageURI
         });
 
-        tokenId = _mintCardInternal(to, data, _poolRoyaltyReceivers[cardId]);
-        tokenCardId[tokenId] = cardId;
+        tokenId = _mintCardInternal(to, data, _poolRoyaltyReceivers[cardId], cardId);
     }
 
     // ─── Minting — freeform (kept for direct/admin minting & tests) ───────────
@@ -266,20 +265,26 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
         RoyaltyReceiver[] memory rxMem = new RoyaltyReceiver[](receivers.length);
         for (uint256 i; i < receivers.length; ++i) rxMem[i] = receivers[i];
 
-        tokenId = _mintCardInternal(to, data, rxMem);
+        tokenId = _mintCardInternal(to, data, rxMem, 0);
     }
 
+    /// @dev CEI: all state writes happen BEFORE _safeMint so that any
+    ///      onERC721Received callback sees a fully initialised token.
     function _mintCardInternal(
         address to,
         Card memory data,
-        RoyaltyReceiver[] memory receivers
+        RoyaltyReceiver[] memory receivers,
+        uint16 poolCardId // 0 for freeform mints
     ) internal returns (uint256 tokenId) {
         tokenId = _nextTokenId++;
-        _safeMint(to, tokenId);
+        // ── Effects (before external call) ────────────────────────────────────
         _cards[tokenId] = data;
+        if (poolCardId != 0) tokenCardId[tokenId] = poolCardId;
         for (uint256 i; i < receivers.length; ++i) {
             _royaltyReceivers[tokenId].push(receivers[i]);
         }
+        // ── Interaction ───────────────────────────────────────────────────────
+        _safeMint(to, tokenId);
         emit CardMinted(to, tokenId, data.rarity);
         emit RoyaltyReceiversSet(tokenId, receivers);
     }

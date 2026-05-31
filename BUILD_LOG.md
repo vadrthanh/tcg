@@ -543,4 +543,58 @@ cd contracts && npm run deploy:sepolia && npm run verify:sepolia
 
 ---
 
-## Phase 8 — Audit & Documentation ⏳ PENDING
+## Phase 7 — React Frontend ✅ COMPLETE
+
+**Date:** 2026-06-01
+
+### What was built
+
+5 pages, all wired to ethers v6 + MetaMask:
+
+| Page | File | Key features |
+|---|---|---|
+| Connect | `pages/Connect.tsx` | MetaMask connect, Sepolia enforcement, network switch |
+| Gacha | `pages/Gacha.tsx` | openPack tx, PackOpened event parsing, 5-card CSS 3D flip reveal |
+| Inventory | `pages/Inventory.tsx` | Loads owned tokens, card grid with rarity colours |
+| Marketplace | `pages/MarketplacePage.tsx` | Browse listings, list owned card, buy with atomicity |
+| Royalty Dashboard | `pages/RoyaltyDashboard.tsx` | Read claimable balance, claim() tx |
+
+Supporting files:
+- `hooks/useWallet.ts` — BrowserProvider, signer, chainId check
+- `components/CardFlip.tsx` — CSS 3D perspective flip, rarity-based glow
+- `components/TxToast.tsx` — pending/success/error toasts (react-hot-toast)
+- `config/contracts.ts` — typed ABIs, addresses, rarity name/colour maps
+
+**Build:** `npm run build` → 476 kB JS, 0 TypeScript errors.
+
+## Phase 8 — Audit & Documentation ✅ COMPLETE
+
+**Date:** 2026-06-01
+
+### Security fix applied during audit
+
+`PokemonCardNFT._mintCardInternal` — reordered to CEI pattern:
+- Before: `_safeMint` called first, then `_cards[tokenId]` and `_royaltyReceivers` written.
+- After: all state written before `_safeMint`. Any `onERC721Received` callback sees a fully initialised token. Also eliminated the separate `tokenCardId[tokenId] = cardId` post-call by threading `poolCardId` parameter into `_mintCardInternal`.
+
+**Slither 0.11.5 ran across all 4 contracts: 42 findings, all triaged.**
+- 0 high, 0 unresolved medium, 0 unresolved low.
+- 1 medium fixed (CEI reorder above).
+- 3 medium false positives (uninitialized-local: zero is the correct init; calls-loop: bounded at 5; locked-ether: test-only contract).
+- Remainder: info/style findings, accepted with documented rationale.
+
+### Deliverables
+
+| File | Contents |
+|---|---|
+| `docs/audit.md` | Self-audit: reentrancy analysis, access control table, integer/overflow review, out-of-gas proof, full Slither triage |
+| `docs/architecture.md` | ASCII flow diagrams, royalty math proof with exact wei, gacha probability table + empirical data, gas analysis, setup guide |
+| `DEMO.md` | Click-by-click 3-minute Sepolia demo script with talking points and local fallback |
+
+### Test suite after audit fix
+
+```
+Hardhat: 112/112 passing
+Foundry: 17/17 passing
+Slither: 0 unresolved findings
+```
