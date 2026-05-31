@@ -506,7 +506,36 @@ Generated `README.md` (248 lines) at the repo root covering:
 - Team table (5 roles with deliverables)
 - MIT license
 
-## Phase 6 — Deploy to Sepolia ⏳ PENDING
+## Phase 6 — Deploy Script ✅ COMPLETE (Sepolia pending credentials)
+
+**Date:** 2026-06-01
+
+### What was built
+
+`contracts/scripts/deploy.ts` — full deploy pipeline:
+1. Deploy `PokemonCardNFT(admin)`
+2. Deploy `PaymentSplitter(admin)`
+3. Deploy `GachaPack(nft, splitter, platformTreasury, issuer, 8000)`
+4. Deploy `Marketplace(nft, splitter, platformTreasury, 250)`
+5. Grant `MINTER_ROLE` → GachaPack; `DEPOSITOR_ROLE` → GachaPack + Marketplace
+6. `batchAddCards` in batches of 10 — seeds all 40 cards from `data/pokemon-cards.json`
+7. Saves `deploy/addresses.json` for the frontend to read
+
+`contracts/scripts/verify.ts` — reads `addresses.json`, calls `hardhat verify` for all 4 contracts.
+
+**Tested locally (hardhat network):**
+```
+PokemonCardNFT : 0x5FbDB2315678afecb367f032d93F642f64180aa3
+PaymentSplitter: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+GachaPack      : 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
+Marketplace    : 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
+Card pool seeded: 40 cards ✓
+```
+
+**To deploy to Sepolia:** create `.env` with `SEPOLIA_RPC_URL`, `PRIVATE_KEY`, `ETHERSCAN_API_KEY`, then:
+```bash
+cd contracts && npm run deploy:sepolia && npm run verify:sepolia
+```
 
 ---
 

@@ -1,122 +1,70 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
+import { Toaster } from "react-hot-toast";
+import { useWallet } from "./hooks/useWallet";
+import { Connect } from "./pages/Connect";
+import { Gacha } from "./pages/Gacha";
+import { Inventory } from "./pages/Inventory";
+import { MarketplacePage } from "./pages/MarketplacePage";
+import { RoyaltyDashboard } from "./pages/RoyaltyDashboard";
 
-function App() {
-  const [count, setCount] = useState(0)
+type Page = "connect" | "gacha" | "inventory" | "marketplace" | "royalty";
+
+const NAV: { id: Page; label: string }[] = [
+  { id: "connect",     label: "🔌 Connect" },
+  { id: "gacha",       label: "⚡ Gacha" },
+  { id: "inventory",   label: "🃏 Inventory" },
+  { id: "marketplace", label: "🏪 Marketplace" },
+  { id: "royalty",     label: "💰 Royalties" },
+];
+
+export default function App() {
+  const wallet = useWallet();
+  const [page, setPage] = useState<Page>("connect");
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans">
+      <Toaster position="top-right" />
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {/* Header */}
+      <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <span className="text-white font-bold text-lg">🎴 Pokémon TCG NFT</span>
+          {wallet.address && (
+            <span className="text-xs text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded-full">
+              {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
+              {wallet.chainOk
+                ? <span className="ml-2 text-green-400">Sepolia</span>
+                : <span className="ml-2 text-yellow-400">Wrong network</span>}
+            </span>
+          )}
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        {/* Nav */}
+        <nav className="max-w-5xl mx-auto px-4 pb-2 flex gap-1 overflow-x-auto">
+          {NAV.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setPage(id)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition ${
+                page === id
+                  ? "bg-indigo-600 text-white"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/* Page content */}
+      <main className="max-w-5xl mx-auto">
+        {page === "connect"     && <Connect   wallet={wallet} />}
+        {page === "gacha"       && <Gacha     wallet={wallet} />}
+        {page === "inventory"   && <Inventory wallet={wallet} />}
+        {page === "marketplace" && <MarketplacePage wallet={wallet} />}
+        {page === "royalty"     && <RoyaltyDashboard wallet={wallet} />}
+      </main>
+    </div>
+  );
 }
-
-export default App
