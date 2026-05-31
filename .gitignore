@@ -31,3 +31,4 @@ contracts/.cache_forge/
 .DS_Store
 *.log
 database.json
+instruction.md
