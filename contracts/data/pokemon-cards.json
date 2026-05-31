@@ -1,0 +1,244 @@
+{
+  "cards": [
+    {
+      "cardId": 1, "name": "Rattata",    "rarity": "Common",    "pokemonType": "Normal",
+      "hp": 30,  "attack": "Skull Bash - 20",     "maxSupply": 800, "floorPrice": "0.001",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/19.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 2, "name": "Pidgey",     "rarity": "Common",    "pokemonType": "Flying",
+      "hp": 40,  "attack": "Gust - 20",           "maxSupply": 900, "floorPrice": "0.0008",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/16.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 3, "name": "Caterpie",   "rarity": "Common",    "pokemonType": "Bug",
+      "hp": 45,  "attack": "String Shot - 10",    "maxSupply": 1000, "floorPrice": "0.0005",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 4, "name": "Weedle",     "rarity": "Common",    "pokemonType": "Poison",
+      "hp": 40,  "attack": "Poison Sting - 15",   "maxSupply": 950, "floorPrice": "0.0006",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/13.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 5, "name": "Magikarp",   "rarity": "Common",    "pokemonType": "Water",
+      "hp": 20,  "attack": "Splash - 0",           "maxSupply": 1000, "floorPrice": "0.0005",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/129.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 6, "name": "Zubat",      "rarity": "Common",    "pokemonType": "Poison",
+      "hp": 40,  "attack": "Leech Life - 15",      "maxSupply": 850, "floorPrice": "0.0007",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/41.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 7, "name": "Meowth",     "rarity": "Common",    "pokemonType": "Normal",
+      "hp": 40,  "attack": "Scratch - 20",         "maxSupply": 800, "floorPrice": "0.001",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/52.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 8, "name": "Spearow",    "rarity": "Common",    "pokemonType": "Flying",
+      "hp": 40,  "attack": "Peck - 25",            "maxSupply": 750, "floorPrice": "0.0012",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/21.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 9, "name": "Ekans",      "rarity": "Common",    "pokemonType": "Poison",
+      "hp": 35,  "attack": "Wrap - 20",            "maxSupply": 700, "floorPrice": "0.0015",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/23.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 10, "name": "Sandshrew", "rarity": "Common",    "pokemonType": "Ground",
+      "hp": 50,  "attack": "Sand Attack - 20",     "maxSupply": 750, "floorPrice": "0.0015",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/27.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 11, "name": "Mankey",    "rarity": "Common",    "pokemonType": "Fight",
+      "hp": 40,  "attack": "Low Kick - 30",        "maxSupply": 700, "floorPrice": "0.002",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/56.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 12, "name": "Poliwag",   "rarity": "Common",    "pokemonType": "Water",
+      "hp": 40,  "attack": "Bubble - 20",          "maxSupply": 600, "floorPrice": "0.002",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/60.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 13, "name": "Jigglypuff", "rarity": "Uncommon", "pokemonType": "Normal",
+      "hp": 60,  "attack": "Sing - 20",            "maxSupply": 300, "floorPrice": "0.006",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/39.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 14, "name": "Growlithe", "rarity": "Uncommon",  "pokemonType": "Fire",
+      "hp": 55,  "attack": "Ember - 40",           "maxSupply": 280, "floorPrice": "0.007",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/58.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 15, "name": "Machop",    "rarity": "Uncommon",  "pokemonType": "Fight",
+      "hp": 70,  "attack": "Seismic Toss - 40",    "maxSupply": 300, "floorPrice": "0.007",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/66.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 16, "name": "Vulpix",    "rarity": "Uncommon",  "pokemonType": "Fire",
+      "hp": 50,  "attack": "Tail Whip - 30",       "maxSupply": 270, "floorPrice": "0.008",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/37.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 17, "name": "Tentacool", "rarity": "Uncommon",  "pokemonType": "Water",
+      "hp": 40,  "attack": "Acid - 30",            "maxSupply": 320, "floorPrice": "0.006",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/72.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 18, "name": "Ponyta",    "rarity": "Uncommon",  "pokemonType": "Fire",
+      "hp": 50,  "attack": "Flame Wheel - 50",     "maxSupply": 260, "floorPrice": "0.009",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/77.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 19, "name": "Gastly",    "rarity": "Uncommon",  "pokemonType": "Ghost",
+      "hp": 30,  "attack": "Lick - 30",            "maxSupply": 250, "floorPrice": "0.009",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/92.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 20, "name": "Krabby",    "rarity": "Uncommon",  "pokemonType": "Water",
+      "hp": 30,  "attack": "Crabhammer - 50",      "maxSupply": 280, "floorPrice": "0.008",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/98.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 21, "name": "Geodude",   "rarity": "Uncommon",  "pokemonType": "Rock",
+      "hp": 40,  "attack": "Rock Throw - 50",      "maxSupply": 270, "floorPrice": "0.01",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/74.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 22, "name": "Pikachu",   "rarity": "Rare",      "pokemonType": "Electric",
+      "hp": 60,  "attack": "Thunderbolt - 60",     "maxSupply": 80,  "floorPrice": "0.04",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 23, "name": "Eevee",     "rarity": "Rare",      "pokemonType": "Normal",
+      "hp": 55,  "attack": "Quick Attack - 40",    "maxSupply": 75,  "floorPrice": "0.035",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/133.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 24, "name": "Gengar",    "rarity": "Rare",      "pokemonType": "Ghost",
+      "hp": 60,  "attack": "Shadow Ball - 80",     "maxSupply": 70,  "floorPrice": "0.04",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/94.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 25, "name": "Ditto",     "rarity": "Rare",      "pokemonType": "Normal",
+      "hp": 48,  "attack": "Transform - 0",        "maxSupply": 60,  "floorPrice": "0.04",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/132.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 26, "name": "Lapras",    "rarity": "Rare",      "pokemonType": "Water",
+      "hp": 130, "attack": "Ice Beam - 90",        "maxSupply": 65,  "floorPrice": "0.038",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/131.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 27, "name": "Chansey",   "rarity": "Rare",      "pokemonType": "Normal",
+      "hp": 250, "attack": "Softboiled - 0",       "maxSupply": 70,  "floorPrice": "0.035",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/113.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 28, "name": "Electabuzz","rarity": "Rare",      "pokemonType": "Electric",
+      "hp": 65,  "attack": "Thunder Punch - 70",   "maxSupply": 65,  "floorPrice": "0.038",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/125.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 29, "name": "Snorlax",   "rarity": "Rare",      "pokemonType": "Normal",
+      "hp": 160, "attack": "Body Slam - 80",       "maxSupply": 60,  "floorPrice": "0.04",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/143.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 30, "name": "Dragonair", "rarity": "UltraRare", "pokemonType": "Dragon",
+      "hp": 130, "attack": "Dragon Rage - 100",    "maxSupply": 25,  "floorPrice": "0.1",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/148.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 31, "name": "Alakazam",  "rarity": "UltraRare", "pokemonType": "Psychic",
+      "hp": 80,  "attack": "Psychic - 100",        "maxSupply": 22,  "floorPrice": "0.1",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/65.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 32, "name": "Machamp",   "rarity": "UltraRare", "pokemonType": "Fight",
+      "hp": 120, "attack": "Dynamic Punch - 100",  "maxSupply": 20,  "floorPrice": "0.09",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/68.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 33, "name": "Arcanine",  "rarity": "UltraRare", "pokemonType": "Fire",
+      "hp": 90,  "attack": "Fire Blast - 110",     "maxSupply": 24,  "floorPrice": "0.1",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/59.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 34, "name": "Gyarados",  "rarity": "UltraRare", "pokemonType": "Water",
+      "hp": 130, "attack": "Hyper Beam - 120",     "maxSupply": 22,  "floorPrice": "0.12",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/130.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 35, "name": "Hypno",     "rarity": "UltraRare", "pokemonType": "Psychic",
+      "hp": 85,  "attack": "Hypnosis - 90",        "maxSupply": 20,  "floorPrice": "0.08",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/97.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 36, "name": "Mewtwo",    "rarity": "Legendary", "pokemonType": "Psychic",
+      "hp": 150, "attack": "Psystrike - 150",      "maxSupply": 5,   "floorPrice": "0.8",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/150.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 37, "name": "Mew",       "rarity": "Legendary", "pokemonType": "Psychic",
+      "hp": 100, "attack": "Ancient Power - 120",  "maxSupply": 8,   "floorPrice": "0.6",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/151.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 38, "name": "Articuno",  "rarity": "Legendary", "pokemonType": "Ice",
+      "hp": 120, "attack": "Blizzard - 130",       "maxSupply": 6,   "floorPrice": "0.5",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/144.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 39, "name": "Zapdos",    "rarity": "Legendary", "pokemonType": "Electric",
+      "hp": 120, "attack": "Thunder - 140",        "maxSupply": 6,   "floorPrice": "0.5",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/145.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    },
+    {
+      "cardId": 40, "name": "Moltres",   "rarity": "Legendary", "pokemonType": "Fire",
+      "hp": 120, "attack": "Fire Spin - 130",      "maxSupply": 3,   "floorPrice": "0.3",
+      "imageURI": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/146.png",
+      "royaltyReceivers": [{"label": "Platform Treasury", "bps": 300}, {"label": "Original Artist", "bps": 200}]
+    }
+  ]
+}

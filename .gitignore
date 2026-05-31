@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.local
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Hardhat
+contracts/artifacts/
+contracts/cache_hardhat/
+contracts/typechain-types/
+contracts/gas-report.txt
+contracts/coverage/
+contracts/coverage.json
+
+# Foundry
+contracts/out/
+contracts/cache_forge/
+contracts/.cache_forge/
+
+# Frontend
+frontend/dist/
+frontend/.env
+
+# Foundry test cache
+contracts/cache/
+contracts/.cache_forge/
+
+# Misc
+.DS_Store
+*.log
+database.json
