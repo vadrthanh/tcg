@@ -81,6 +81,57 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
         nft.connect(user).addCardToPool(makeTemplate(1, 0, 100), [RX(user.address, 300)])
       ).to.be.revertedWithCustomError(nft, "OwnableUnauthorizedAccount");
     });
+
+    // ── H-01 regression: write-once template, no supply-reset attack ──────
+    it("reverts InvalidCardId when cardId == 0 (sentinel collision)", async function () {
+      await expect(
+        nft.connect(admin).addCardToPool(makeTemplate(0, 0, 100), [RX(user.address, 300)])
+      ).to.be.revertedWithCustomError(nft, "InvalidCardId");
+    });
+
+    it("reverts InvalidMaxSupply when maxSupply == 0", async function () {
+      await expect(
+        nft.connect(admin).addCardToPool(makeTemplate(1, 0, 0), [RX(user.address, 300)])
+      ).to.be.revertedWithCustomError(nft, "InvalidMaxSupply");
+    });
+
+    it("reverts CardAlreadyInPool when re-adding an existing cardId", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(1, 0, 100), [RX(user.address, 300)]);
+      await expect(
+        nft.connect(admin).addCardToPool(makeTemplate(1, 0, 100), [RX(user.address, 300)])
+      ).to.be.revertedWithCustomError(nft, "CardAlreadyInPool").withArgs(1);
+    });
+
+    it("re-add cannot reset currentSupply mid-sale (supply inflation guard)", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(7, 0, 2), [RX(user.address, 300)]);
+      await nft.connect(minter).mintCard(user.address, 7); // 1/2
+      await nft.connect(minter).mintCard(user.address, 7); // 2/2 — sold out
+
+      // An attempted re-add must NOT succeed (which would otherwise reset
+      // currentSupply to 0 and re-open minting beyond maxSupply).
+      await expect(
+        nft.connect(admin).addCardToPool(makeTemplate(7, 0, 2), [RX(user.address, 300)])
+      ).to.be.revertedWithCustomError(nft, "CardAlreadyInPool");
+
+      // Sanity: supply still at cap, mint still reverts.
+      expect((await nft.getCardTemplate(7)).currentSupply).to.equal(2);
+      await expect(
+        nft.connect(minter).mintCard(user.address, 7)
+      ).to.be.revertedWithCustomError(nft, "CardSoldOut");
+    });
+
+    it("re-add does not duplicate cardId in rarity array (probability skew guard)", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(20, 4 /* Legendary */, 1), [RX(user.address, 300)]);
+      // Attempt re-add must revert.
+      await expect(
+        nft.connect(admin).addCardToPool(makeTemplate(20, 4, 1), [RX(user.address, 300)])
+      ).to.be.revertedWithCustomError(nft, "CardAlreadyInPool");
+
+      // Legendary array still contains exactly one entry.
+      const legendary = await nft.getAvailableCardIds(4);
+      expect(legendary.length).to.equal(1);
+      expect(legendary[0]).to.equal(20);
+    });
   });
 
   // ─── batchAddCards ────────────────────────────────────────────────────────
@@ -103,6 +154,22 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       await nft.connect(admin).batchAddCards([tpl], user.address, 300, admin.address, 200);
       const stored = await nft.getCardTemplate(99);
       expect(stored.currentSupply).to.equal(0);
+    });
+
+    // ── H-01 regression on the batch path ────────────────────────────────
+    it("reverts CardAlreadyInPool if any template in the batch duplicates an existing one", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(1, 0, 100), [RX(user.address, 300)]);
+      const batch = [makeTemplate(2, 0, 50), makeTemplate(1, 0, 50)]; // dup at idx 1
+      await expect(
+        nft.connect(admin).batchAddCards(batch, user.address, 300, admin.address, 200)
+      ).to.be.revertedWithCustomError(nft, "CardAlreadyInPool").withArgs(1);
+    });
+
+    it("reverts InvalidCardId if a batch template uses cardId == 0", async function () {
+      const batch = [makeTemplate(1, 0, 50), makeTemplate(0, 0, 50)];
+      await expect(
+        nft.connect(admin).batchAddCards(batch, user.address, 300, admin.address, 200)
+      ).to.be.revertedWithCustomError(nft, "InvalidCardId");
     });
   });
 
