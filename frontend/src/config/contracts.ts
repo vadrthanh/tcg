@@ -1,14 +1,28 @@
-// Contract ABIs and addresses. The address object is populated from
-// deploy/addresses.json after running `npm run deploy:sepolia`.
-// For local dev, update the addresses below.
+// Contract ABIs and addresses. Addresses are read from Vite env vars
+// (VITE_*) — see frontend/.env.example. The deploy script writes them to
+// contracts/deploy/addresses.json after `npm run deploy:sepolia`; copy from
+// there into frontend/.env (the file is gitignored).
 
-export const CHAIN_ID = 11155111; // Sepolia
+const env = import.meta.env;
+
+function requireAddr(name: string): string {
+  const v = env[name];
+  if (!v || !/^0x[0-9a-fA-F]{40}$/.test(v)) {
+    throw new Error(
+      `${name} is not set or is not a valid address. ` +
+      `Copy frontend/.env.example to frontend/.env and fill in deployed addresses.`
+    );
+  }
+  return v;
+}
+
+export const CHAIN_ID = Number(env.VITE_CHAIN_ID ?? 11155111);
 
 export const ADDRESSES = {
-  PokemonCardNFT:  "0x0000000000000000000000000000000000000000",
-  PaymentSplitter: "0x0000000000000000000000000000000000000000",
-  GachaPack:       "0x0000000000000000000000000000000000000000",
-  Marketplace:     "0x0000000000000000000000000000000000000000",
+  PokemonCardNFT:  requireAddr("VITE_POKEMON_CARD_NFT_ADDRESS"),
+  PaymentSplitter: requireAddr("VITE_PAYMENT_SPLITTER_ADDRESS"),
+  GachaPack:       requireAddr("VITE_GACHA_PACK_ADDRESS"),
+  Marketplace:     requireAddr("VITE_MARKETPLACE_ADDRESS"),
 };
 
 // ─── ABIs (minimal — only functions called by the UI) ────────────────────────
