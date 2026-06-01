@@ -32,3 +32,5 @@ contracts/.cache_forge/
 *.log
 database.json
 instruction.md
+CLAUDE.md
+
