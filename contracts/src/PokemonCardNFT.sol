@@ -73,6 +73,15 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
     error EmptyReceivers();
     error CardSoldOut(uint16 cardId);
     error CardNotInPool(uint16 cardId);
+    /// @dev cardId == 0 is reserved as the "freeform mint" sentinel for tokenCardId.
+    error InvalidCardId();
+    /// @dev maxSupply must be > 0; a template with 0 supply is indistinguishable
+    ///      from an absent slot and would silently allow re-adds.
+    error InvalidMaxSupply();
+    /// @dev Templates are write-once. Mutating an existing card via re-add would
+    ///      reset currentSupply (→ supply inflation) and duplicate the entry in
+    ///      cardIdsByRarity_* (→ probability skew).
+    error CardAlreadyInPool(uint16 cardId);
 
     // ─── Events ───────────────────────────────────────────────────────────────
 
@@ -120,6 +129,15 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
         CardTemplate    calldata template,
         RoyaltyReceiver[] memory receivers
     ) internal {
+        // Reject the sentinel cardId — 0 marks a freeform mint in tokenCardId.
+        if (template.cardId == 0) revert InvalidCardId();
+        // Reject zero-supply templates so cardPool[id].maxSupply is a reliable
+        // "is this slot occupied?" probe for the duplicate check below.
+        if (template.maxSupply == 0) revert InvalidMaxSupply();
+        // Write-once: prevent supply-counter reset and rarity-array duplication.
+        if (cardPool[template.cardId].maxSupply != 0) {
+            revert CardAlreadyInPool(template.cardId);
+        }
         if (receivers.length == 0) revert EmptyReceivers();
 
         uint96 totalBps;
