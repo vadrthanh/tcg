@@ -1,0 +1,61 @@
+// Express API server. Reads from SQLite (populated by indexer.ts).
+// All writes go directly to the chain via the user's wallet — this is a read replica.
+
+import "dotenv/config";
+import express from "express";
+import cors    from "cors";
+
+import { cardsRouter }        from "./routes/cards.js";
+import { nftsRouter }         from "./routes/nfts.js";
+import { listingsRouter }     from "./routes/listings.js";
+import { transactionsRouter } from "./routes/transactions.js";
+import { statsRouter }        from "./routes/stats.js";
+import { healthRouter }       from "./routes/health.js";
+
+const PORT = parseInt(process.env.PORT ?? "4000", 10);
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// Request log — minimal one-liner.
+app.use((req, _res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
+});
+
+app.use("/api/cards",        cardsRouter);
+app.use("/api/nfts",         nftsRouter);
+app.use("/api/listings",     listingsRouter);
+app.use("/api/transactions", transactionsRouter);
+app.use("/api/stats",        statsRouter);
+app.use("/api/health",       healthRouter);
+
+app.get("/", (_req, res) => {
+  res.json({
+    name: "TCG Backend",
+    endpoints: [
+      "GET /api/cards",
+      "GET /api/cards/:cardId",
+      "GET /api/cards/rarity/:rarity",
+      "GET /api/nfts?owner=0x...",
+      "GET /api/nfts/:tokenId",
+      "GET /api/listings?status=active&rarity=Rare&seller=0x...",
+      "GET /api/listings/:tokenId",
+      "GET /api/transactions?address=0x...&type=card_bought",
+      "GET /api/stats",
+      "GET /api/stats/rarity",
+      "GET /api/health",
+    ],
+  });
+});
+
+// Centralised error handler.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: err.message ?? String(err) });
+});
+
+app.listen(PORT, () => {
+  console.log(`[api] listening on http://localhost:${PORT}`);
+});

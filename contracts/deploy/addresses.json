@@ -1,10 +1,10 @@
 {
-  "network": "hardhat",
-  "chainId": 31337,
-  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "PokemonCardNFT": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "PaymentSplitter": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-  "GachaPack": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-  "Marketplace": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-  "deployedAt": "2026-05-31T18:18:50.168Z"
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x841B660984AB4AFAb2435Ed78De31C754b38eb8b",
+  "PokemonCardNFT": "0x7a1621319a89C2D57012684cE308A592e0A9dC0A",
+  "PaymentSplitter": "0xb42882721848219dA3b7D4fd475765357965E632",
+  "GachaPack": "0x1f8FFae19791A912DB8559b4c76133422E591474",
+  "Marketplace": "0x87b28f2bB2cD27e1310CDcD2ec37d0278BdF37F6",
+  "deployedAt": "2026-06-01T00:45:13.371Z"
 }
