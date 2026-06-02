@@ -1,0 +1,100 @@
+// Pokemon TCG Gacha — read-replica schema for SQLite.
+// All on-chain reads land here via the event indexer; the API serves from here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Card {
+  id            Int       @id                       // matches on-chain cardId
+  name          String
+  rarity        String                              // Common | Uncommon | Rare | UltraRare | Legendary
+  pokemonType   String
+  hp            Int
+  attack        String
+  maxSupply     Int
+  currentSupply Int       @default(0)               // updated by indexer on CardMinted
+  floorPrice    String                              // ETH string for precision
+  imageURI      String
+  mintedNfts    MintedNFT[]
+  listings      Listing[]
+  createdAt     DateTime  @default(now())
+
+  @@index([rarity])
+}
+
+model MintedNFT {
+  tokenId       Int       @id                       // on-chain tokenId
+  cardId        Int
+  card          Card      @relation(fields: [cardId], references: [id])
+  owner         String                              // current owner address (lowercase)
+  mintedTo      String                              // original minter
+  mintedAt      DateTime
+  txHash        String
+  listings      Listing[]
+
+  @@index([owner])
+  @@index([cardId])
+}
+
+model Listing {
+  id            Int       @id @default(autoincrement())
+  tokenId       Int
+  nft           MintedNFT @relation(fields: [tokenId], references: [tokenId])
+  cardId        Int
+  card          Card      @relation(fields: [cardId], references: [id])
+  seller        String                              // lowercase address
+  price         String                              // ETH string
+  status        String    @default("active")        // active | sold | cancelled
+  listedAt      DateTime
+  soldAt        DateTime?
+  buyer         String?
+  txHash        String
+
+  @@index([status])
+  @@index([seller])
+  @@index([cardId])
+  @@index([tokenId, status])
+}
+
+model Transaction {
+  id            Int       @id @default(autoincrement())
+  type          String                              // pack_opened | card_bought | card_listed | card_cancelled
+  from          String                              // lowercase
+  to            String?
+  tokenIds      String                              // JSON-encoded number[] (SQLite has no array type)
+  value         String                              // ETH string
+  txHash        String
+  logIndex      Int       @default(0)
+  blockNumber   Int
+  timestamp     DateTime
+
+  @@unique([txHash, logIndex])
+  @@index([from])
+  @@index([to])
+  @@index([type])
+  @@index([blockNumber])
+}
+
+model RoyaltyClaim {
+  id            Int       @id @default(autoincrement())
+  claimant      String                              // lowercase
+  amount        String                              // ETH string
+  txHash        String
+  logIndex      Int       @default(0)
+  timestamp     DateTime
+
+  @@unique([txHash, logIndex])
+  @@index([claimant])
+}
+
+// Single-row table tracking how far the indexer has scanned.
+model IndexerState {
+  id        Int @id @default(1)
+  lastBlock Int @default(0)
+}
