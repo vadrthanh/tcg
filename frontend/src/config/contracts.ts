@@ -55,6 +55,8 @@ export const MARKET_ABI = [
   "function getSuggestedPrice(uint256 tokenId) view returns (uint256)",
   "function getListingWithDetails(uint256 tokenId) view returns (address seller, uint256 price, string name, uint8 rarity, uint16 hp, string imageURI, uint16 cardId, uint96 suggestedPrice)",
   "event Listed(uint256 indexed tokenId, address indexed seller, uint256 price, uint8 rarity, uint16 cardId)",
+  "event ListingCancelled(uint256 indexed tokenId, address indexed seller)",
+  "event Purchased(uint256 indexed tokenId, address indexed buyer, address indexed seller, uint256 salePrice, uint256 platformFee, uint256 totalRoyalty, uint256 sellerProceeds)",
 ] as const;
 
 export const SPLITTER_ABI = [
