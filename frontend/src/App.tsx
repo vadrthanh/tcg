@@ -3,15 +3,17 @@ import { Toaster } from "react-hot-toast";
 import { useWallet } from "./hooks/useWallet";
 import { Connect } from "./pages/Connect";
 import { Gacha } from "./pages/Gacha";
+import { Collection } from "./pages/Collection";
 import { Inventory } from "./pages/Inventory";
 import { MarketplacePage } from "./pages/MarketplacePage";
 import { RoyaltyDashboard } from "./pages/RoyaltyDashboard";
 
-type Page = "connect" | "gacha" | "inventory" | "marketplace" | "royalty";
+type Page = "connect" | "gacha" | "collection" | "inventory" | "marketplace" | "royalty";
 
 const NAV: { id: Page; label: string }[] = [
   { id: "connect",     label: "🔌 Connect" },
   { id: "gacha",       label: "⚡ Gacha" },
+  { id: "collection",  label: "📚 Collection" },
   { id: "inventory",   label: "🃏 Inventory" },
   { id: "marketplace", label: "🏪 Marketplace" },
   { id: "royalty",     label: "💰 Royalties" },
@@ -59,11 +61,12 @@ export default function App() {
 
       {/* Page content */}
       <main className="max-w-5xl mx-auto">
-        {page === "connect"     && <Connect   wallet={wallet} />}
-        {page === "gacha"       && <Gacha     wallet={wallet} />}
-        {page === "inventory"   && <Inventory wallet={wallet} />}
-        {page === "marketplace" && <MarketplacePage wallet={wallet} />}
-        {page === "royalty"     && <RoyaltyDashboard wallet={wallet} />}
+        {page === "connect"     && <Connect    wallet={wallet} />}
+        {page === "gacha"       && <Gacha      wallet={wallet} />}
+        {page === "collection"  && <Collection wallet={wallet} />}
+        {page === "inventory"   && <Inventory  wallet={wallet} />}
+        {page === "marketplace" && <MarketplacePage   wallet={wallet} />}
+        {page === "royalty"     && <RoyaltyDashboard  wallet={wallet} />}
       </main>
     </div>
   );
