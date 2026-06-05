@@ -292,4 +292,103 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       expect((await nft.getCardTemplate(1)).currentSupply).to.equal(0);
     });
   });
+  // ─── getAvailableCardIds — Dynamic updates ────────────────────────────────
+
+  describe("getAvailableCardIds — Dynamic updates", function () {
+    it("returns an empty array for an unused rarity level", async function () {
+      const available = await nft.getAvailableCardIds(1); // Rarity 1 (Uncommon) not added
+      expect(available.length).to.equal(0);
+    });
+
+    it("removes cardId from available list when maxSupply is reached", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(10, 0, 1), [RX(user.address, 300)]);
+      await nft.connect(admin).addCardToPool(makeTemplate(11, 0, 5), [RX(user.address, 300)]);
+      
+      let available = await nft.getAvailableCardIds(0);
+      expect(available.length).to.equal(2);
+      expect(available).to.include(10n);
+      expect(available).to.include(11n);
+
+      // Mint out card 10 (maxSupply = 1)
+      await nft.connect(minter).mintCard(user.address, 10);
+      
+      available = await nft.getAvailableCardIds(0);
+      expect(available.length).to.equal(1);
+      expect(available[0]).to.equal(11n);
+    });
+
+    it("does not affect other rarities when a card sells out", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(10, 0, 1), [RX(user.address, 300)]);
+      await nft.connect(admin).addCardToPool(makeTemplate(20, 2, 1), [RX(user.address, 300)]);
+      
+      await nft.connect(minter).mintCard(user.address, 10); // Sold out Common
+      
+      const availableRare = await nft.getAvailableCardIds(2);
+      expect(availableRare.length).to.equal(1);
+      expect(availableRare[0]).to.equal(20n);
+    });
+  });
+
+  // ─── Royalties Configuration ──────────────────────────────────────────────
+
+  describe("Royalties Configuration", function () {
+    it("allows adding a card with zero royalty receivers", async function () {
+      await nft.connect(admin).addCardToPool(makeTemplate(1, 0, 10), []);
+      await nft.connect(minter).mintCard(user.address, 1);
+      
+      const rxs = await nft.getRoyaltyReceivers(0);
+      expect(rxs.length).to.equal(0);
+    });
+
+    it("handles multiple royalty receivers correctly", async function () {
+      const receivers = [
+        RX(user.address, 100),
+        RX(admin.address, 200),
+        RX(minter.address, 300)
+      ];
+      await nft.connect(admin).addCardToPool(makeTemplate(2, 1, 10), receivers);
+      await nft.connect(minter).mintCard(user.address, 2);
+      
+      const rxs = await nft.getRoyaltyReceivers(0);
+      expect(rxs.length).to.equal(3);
+      expect(rxs[0].receiver).to.equal(user.address);
+      expect(rxs[0].feeBps).to.equal(100);
+      expect(rxs[2].receiver).to.equal(minter.address);
+      expect(rxs[2].feeBps).to.equal(300);
+    });
+  });
+
+  // ─── getCard & Template Data Integrity ────────────────────────────────────
+
+  describe("getCard & Template Data Integrity", function () {
+    it("stores and retrieves the exact floorPrice", async function () {
+      const tpl = makeTemplate(55, 1, 100);
+      tpl.floorPrice = ethers.parseEther("1.5");
+      await nft.connect(admin).addCardToPool(tpl, [RX(user.address, 300)]);
+      
+      const stored = await nft.getCardTemplate(55);
+      expect(stored.floorPrice).to.equal(ethers.parseEther("1.5"));
+    });
+
+    it("preserves exact string fields (pokemonType, attack, imageURI)", async function () {
+      const tpl = makeTemplate(99, 4, 10);
+      tpl.pokemonType = "Electric/Steel";
+      tpl.attack = "Thunderbolt - 90";
+      tpl.imageURI = "ipfs://custom-hash-123";
+      
+      await nft.connect(admin).addCardToPool(tpl, [RX(user.address, 300)]);
+      await nft.connect(minter).mintCard(user.address, 99);
+      
+      const card = await nft.getCard(0);
+      expect(card.pokemonType).to.equal("Electric/Steel");
+      expect(card.attack).to.equal("Thunderbolt - 90");
+      expect(card.imageURI).to.equal("ipfs://custom-hash-123");
+    });
+
+    it("reverts when querying getCard for a non-existent token", async function () {
+      await expect(
+        nft.getCard(999)
+      ).to.be.revertedWithCustomError(nft, "ERC721NonexistentToken").or.revertedWith("ERC721: invalid token ID");
+    });
+  });
 });
