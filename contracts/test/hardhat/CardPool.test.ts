@@ -33,6 +33,10 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
 
   const RX = (addr: string, bps: number) => ({ receiver: addr, feeBps: bps });
 
+  // mintCard is overloaded, so TypeChain exposes no bare `.mintCard` member —
+  // index the template-based overload by its full signature to stay typed.
+  const MINT = "mintCard(address,uint16)";
+
   beforeEach(async function () {
     [admin, minter, user] = await ethers.getSigners();
     const factory = await ethers.getContractFactory("PokemonCardNFT");
@@ -104,8 +108,8 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
 
     it("re-add cannot reset currentSupply mid-sale (supply inflation guard)", async function () {
       await nft.connect(admin).addCardToPool(makeTemplate(7, 0, 2), [RX(user.address, 300)]);
-      await nft.connect(minter).mintCard(user.address, 7); // 1/2
-      await nft.connect(minter).mintCard(user.address, 7); // 2/2 — sold out
+      await nft.connect(minter)[MINT](user.address, 7); // 1/2
+      await nft.connect(minter)[MINT](user.address, 7); // 2/2 — sold out
 
       // An attempted re-add must NOT succeed (which would otherwise reset
       // currentSupply to 0 and re-open minting beyond maxSupply).
@@ -116,7 +120,7 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       // Sanity: supply still at cap, mint still reverts.
       expect((await nft.getCardTemplate(7)).currentSupply).to.equal(2);
       await expect(
-        nft.connect(minter).mintCard(user.address, 7)
+        nft.connect(minter)[MINT](user.address, 7)
       ).to.be.revertedWithCustomError(nft, "CardSoldOut");
     });
 
@@ -186,20 +190,20 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
     });
 
     it("mints a card from the pool and increments currentSupply", async function () {
-      await nft.connect(minter).mintCard(user.address, 1);
+      await nft.connect(minter)[MINT](user.address, 1);
       const stored = await nft.getCardTemplate(1);
       expect(stored.currentSupply).to.equal(1);
       expect(await nft.ownerOf(0)).to.equal(user.address);
     });
 
     it("minted card has correct name from template", async function () {
-      await nft.connect(minter).mintCard(user.address, 1);
+      await nft.connect(minter)[MINT](user.address, 1);
       const card = await nft.getCard(0);
       expect(card.name).to.equal("Card_1");
     });
 
     it("minted card has royalty receivers from pool", async function () {
-      await nft.connect(minter).mintCard(user.address, 1);
+      await nft.connect(minter)[MINT](user.address, 1);
       const rxs = await nft.getRoyaltyReceivers(0);
       expect(rxs.length).to.equal(2);
       expect(rxs[0].receiver).to.equal(user.address);
@@ -207,23 +211,23 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
     });
 
     it("mints up to maxSupply successfully", async function () {
-      await nft.connect(minter).mintCard(user.address, 1); // supply 1/2
-      await nft.connect(minter).mintCard(user.address, 1); // supply 2/2
+      await nft.connect(minter)[MINT](user.address, 1); // supply 1/2
+      await nft.connect(minter)[MINT](user.address, 1); // supply 2/2
       const stored = await nft.getCardTemplate(1);
       expect(stored.currentSupply).to.equal(2);
     });
 
     it("reverts CardSoldOut when maxSupply is reached", async function () {
-      await nft.connect(minter).mintCard(user.address, 1); // 1/2
-      await nft.connect(minter).mintCard(user.address, 1); // 2/2
+      await nft.connect(minter)[MINT](user.address, 1); // 1/2
+      await nft.connect(minter)[MINT](user.address, 1); // 2/2
       await expect(
-        nft.connect(minter).mintCard(user.address, 1) // 3rd → sold out
+        nft.connect(minter)[MINT](user.address, 1) // 3rd → sold out
       ).to.be.revertedWithCustomError(nft, "CardSoldOut");
     });
 
     it("sold-out card does NOT appear in getAvailableCardIds", async function () {
-      await nft.connect(minter).mintCard(user.address, 1); // 1/2
-      await nft.connect(minter).mintCard(user.address, 1); // 2/2
+      await nft.connect(minter)[MINT](user.address, 1); // 1/2
+      await nft.connect(minter)[MINT](user.address, 1); // 2/2
 
       const available = await nft.getAvailableCardIds(0); // Common
       // Card 1 is sold out, only Card 2 (maxSupply=3) should appear
@@ -233,22 +237,22 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
 
     it("reverts CardNotInPool for unknown cardId", async function () {
       await expect(
-        nft.connect(minter).mintCard(user.address, 99)
+        nft.connect(minter)[MINT](user.address, 99)
       ).to.be.revertedWithCustomError(nft, "CardNotInPool");
     });
 
     it("different cards have independent supply counters", async function () {
-      await nft.connect(minter).mintCard(user.address, 1); // card 1: 1/2
-      await nft.connect(minter).mintCard(user.address, 2); // card 2: 1/3
-      await nft.connect(minter).mintCard(user.address, 2); // card 2: 2/3
+      await nft.connect(minter)[MINT](user.address, 1); // card 1: 1/2
+      await nft.connect(minter)[MINT](user.address, 2); // card 2: 1/3
+      await nft.connect(minter)[MINT](user.address, 2); // card 2: 2/3
       expect((await nft.getCardTemplate(1)).currentSupply).to.equal(1);
       expect((await nft.getCardTemplate(2)).currentSupply).to.equal(2);
     });
 
     it("Legendary card (maxSupply=1) sells out after one mint", async function () {
-      await nft.connect(minter).mintCard(user.address, 5);
+      await nft.connect(minter)[MINT](user.address, 5);
       await expect(
-        nft.connect(minter).mintCard(user.address, 5)
+        nft.connect(minter)[MINT](user.address, 5)
       ).to.be.revertedWithCustomError(nft, "CardSoldOut");
       const available = await nft.getAvailableCardIds(4); // Legendary
       expect(available.length).to.equal(0);
@@ -261,8 +265,8 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
     it("returns all cards with correct remaining supply", async function () {
       await nft.connect(admin).addCardToPool(makeTemplate(1, 0, 5), [RX(user.address, 300)]);
       await nft.connect(admin).addCardToPool(makeTemplate(2, 2, 3), [RX(user.address, 300)]);
-      await nft.connect(minter).mintCard(user.address, 1);
-      await nft.connect(minter).mintCard(user.address, 1);
+      await nft.connect(minter)[MINT](user.address, 1);
+      await nft.connect(minter)[MINT](user.address, 1);
 
       const [ids, remaining] = await nft.getPoolStatus();
       expect(ids.length).to.equal(2);
@@ -310,7 +314,7 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       expect(available).to.include(11n);
 
       // Mint out card 10 (maxSupply = 1)
-      await nft.connect(minter).mintCard(user.address, 10);
+      await nft.connect(minter)[MINT](user.address, 10);
       
       available = await nft.getAvailableCardIds(0);
       expect(available.length).to.equal(1);
@@ -321,7 +325,7 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       await nft.connect(admin).addCardToPool(makeTemplate(10, 0, 1), [RX(user.address, 300)]);
       await nft.connect(admin).addCardToPool(makeTemplate(20, 2, 1), [RX(user.address, 300)]);
       
-      await nft.connect(minter).mintCard(user.address, 10); // Sold out Common
+      await nft.connect(minter)[MINT](user.address, 10); // Sold out Common
       
       const availableRare = await nft.getAvailableCardIds(2);
       expect(availableRare.length).to.equal(1);
@@ -345,7 +349,7 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
         RX(minter.address, 300)
       ];
       await nft.connect(admin).addCardToPool(makeTemplate(2, 1, 10), receivers);
-      await nft.connect(minter).mintCard(user.address, 2);
+      await nft.connect(minter)[MINT](user.address, 2);
       
       const rxs = await nft.getRoyaltyReceivers(0);
       expect(rxs.length).to.equal(3);
@@ -375,7 +379,7 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       tpl.imageURI = "ipfs://custom-hash-123";
 
       await nft.connect(admin).addCardToPool(tpl, [RX(user.address, 300)]);
-      await nft.connect(minter).mintCard(user.address, 99);
+      await nft.connect(minter)[MINT](user.address, 99);
 
       // pokemonType + imageURI live on the minted token's Card struct.
       const card = await nft.getCard(0);

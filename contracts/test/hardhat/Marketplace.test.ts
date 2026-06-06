@@ -54,7 +54,7 @@ describe("Marketplace", function () {
     // Grant direct MINTER_ROLE to admin for this helper
     await nft.connect(admin).grantRole(MINTER_ROLE, admin.address);
     const FREEFORM = "mintCard(address,(string,uint8,string,uint16,string),(address,uint96)[])";
-    const tx = await (nft.connect(admin) as any)[FREEFORM](to, card, receivers);
+    const tx = await nft.connect(admin)[FREEFORM](to, card, receivers);
     const receipt = await tx.wait();
     // Find CardMinted event
     const event = receipt?.logs
