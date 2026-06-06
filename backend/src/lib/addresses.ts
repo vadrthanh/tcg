@@ -55,7 +55,7 @@ export function assertAddressesConfigured() {
     throw new Error(
       "Contract addresses are not configured. Run contracts/scripts/deploy.ts to create " +
       "contracts/deploy/addresses.json, or set " +
-      missing.map(([name]) => name).join(", ") +
+      missing.map(([name]) => `${name} (or VITE_${name})`).join(", ") +
       " in backend/.env."
     );
   }

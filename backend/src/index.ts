@@ -26,6 +26,9 @@ app.use(rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Too many requests" },
+  // Don't throttle uptime probes — a monitor polling /api/health from one IP
+  // would otherwise burn the per-IP budget and start failing health checks.
+  skip: (req) => req.path === "/api/health",
 }));
 app.use(express.json());
 
@@ -62,8 +65,11 @@ app.get("/", (_req, res) => {
 });
 
 // Centralised error handler.
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err);
+  // Headers already flushed (e.g. error mid-stream): delegate to Express's
+  // default handler, which closes the connection. Writing again would throw.
+  if (res.headersSent) return next(err);
   const status = Number(err.statusCode ?? err.status ?? 500);
   const safeStatus = status >= 400 && status < 600 ? status : 500;
   const message = process.env.NODE_ENV === "production"
