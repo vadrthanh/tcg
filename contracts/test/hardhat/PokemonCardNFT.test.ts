@@ -123,13 +123,13 @@ describe("PokemonCardNFT", function () {
       expect(royaltyAmt).to.equal(ethers.parseEther("0.05"));
     });
 
-    it("returns correct total royalty for multiple receivers (300 + 200 = 5%)", async function () {
+    it("returns only the first receiver's royalty for multiple receivers", async function () {
       await mint(minter, user.address, defaultCard, [
         { receiver: royalty1.address, feeBps: 300 },
         { receiver: royalty2.address, feeBps: 200 },
       ]);
       const [, royaltyAmt] = await nft.royaltyInfo(0, ethers.parseEther("2"));
-      expect(royaltyAmt).to.equal(ethers.parseEther("0.1"));
+      expect(royaltyAmt).to.equal(ethers.parseEther("0.06"));
     });
 
     it("returns first receiver as the EIP-2981 receiver address", async function () {

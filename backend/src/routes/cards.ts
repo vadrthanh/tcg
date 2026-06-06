@@ -1,18 +1,19 @@
 import { Router } from "express";
 import { prisma } from "../lib/db.js";
+import { asyncRoute } from "../lib/async-route.js";
 
 const RARITIES = new Set(["Common", "Uncommon", "Rare", "UltraRare", "Legendary"]);
 
 export const cardsRouter = Router();
 
 // GET /api/cards — all cards, sorted by id
-cardsRouter.get("/", async (_req, res) => {
+cardsRouter.get("/", asyncRoute(async (_req, res) => {
   const cards = await prisma.card.findMany({ orderBy: { id: "asc" } });
   res.json({ cards });
-});
+}));
 
 // GET /api/cards/rarity/:rarity — filtered by rarity
-cardsRouter.get("/rarity/:rarity", async (req, res) => {
+cardsRouter.get("/rarity/:rarity", asyncRoute(async (req, res) => {
   const rarity = req.params.rarity;
   if (!RARITIES.has(rarity)) {
     return res.status(400).json({ error: `Unknown rarity. One of: ${[...RARITIES].join(", ")}` });
@@ -22,10 +23,10 @@ cardsRouter.get("/rarity/:rarity", async (req, res) => {
     orderBy: { id: "asc" },
   });
   res.json({ rarity, cards });
-});
+}));
 
 // GET /api/cards/:cardId — single card with mint history (last 50)
-cardsRouter.get("/:cardId", async (req, res) => {
+cardsRouter.get("/:cardId", asyncRoute(async (req, res) => {
   const id = parseInt(req.params.cardId, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: "cardId must be int" });
 
@@ -41,4 +42,4 @@ cardsRouter.get("/:cardId", async (req, res) => {
   });
   if (!card) return res.status(404).json({ error: "card not found" });
   res.json({ card });
-});
+}));

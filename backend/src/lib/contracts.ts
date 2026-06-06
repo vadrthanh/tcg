@@ -1,7 +1,7 @@
 // Ethers v6 contract instances bound to a provider — used by the indexer.
 
 import { Contract, JsonRpcProvider, WebSocketProvider, type Provider } from "ethers";
-import { addresses } from "./addresses.js";
+import { addresses, assertAddressesConfigured } from "./addresses.js";
 import { nftAbi, gachaAbi, marketplaceAbi, splitterAbi } from "./abis.js";
 
 export function makeProvider(): Provider {
@@ -17,6 +17,8 @@ export function makeProvider(): Provider {
 }
 
 export function makeContracts(provider: Provider) {
+  assertAddressesConfigured();
+
   return {
     nft:         new Contract(addresses.PokemonCardNFT,  nftAbi,         provider),
     gacha:       new Contract(addresses.GachaPack,       gachaAbi,       provider),

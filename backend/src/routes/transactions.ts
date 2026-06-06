@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { prisma } from "../lib/db.js";
+import { asyncRoute } from "../lib/async-route.js";
 
 export const transactionsRouter = Router();
 
 // GET /api/transactions?address=0x...&type=card_bought&limit=50
-transactionsRouter.get("/", async (req, res) => {
+transactionsRouter.get("/", asyncRoute(async (req, res) => {
   const address = (req.query.address as string | undefined)?.toLowerCase();
   const type    =  req.query.type    as string | undefined;
   const limit   = Math.min(parseInt((req.query.limit as string) ?? "100", 10), 500);
@@ -23,4 +24,4 @@ transactionsRouter.get("/", async (req, res) => {
     count: txs.length,
     transactions: txs.map(t => ({ ...t, tokenIds: JSON.parse(t.tokenIds) })),
   });
-});
+}));

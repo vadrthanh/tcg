@@ -71,8 +71,9 @@ All read-only.
 ## Indexer
 
 `src/indexer.ts` listens for the following events and writes them into the
-local DB. The events come from `contracts/deploy/addresses.json` — make sure
-that file points to the live deployment.
+local DB. The events come from `contracts/deploy/addresses.json` by default.
+If that generated file does not exist, set the contract address variables in
+`backend/.env` instead. See `.env.example` for the supported names.
 
 ```
 PokemonCardNFT.CardMinted          (informational, not used directly)

@@ -17,13 +17,59 @@
 
 import "dotenv/config";
 
+import { openSync, closeSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { type EventLog, type Log, type Provider } from "ethers";
 import { prisma } from "./lib/db.js";
 import { addresses } from "./lib/addresses.js";
 import { makeProvider, makeContracts } from "./lib/contracts.js";
+import { isUniqueConstraintViolation } from "./lib/prisma-errors.js";
 
 const BATCH = parseInt(process.env.INDEXER_BATCH_BLOCKS ?? "2000", 10);
 const POLL  = parseInt(process.env.INDEXER_POLL_INTERVAL_MS ?? "15000", 10);
+const LOCK_FILE = resolve(process.env.INDEXER_LOCK_FILE ?? ".indexer.lock");
+
+let lockFd: number | undefined;
+
+function acquireIndexerLock() {
+  if (existsSync(LOCK_FILE)) {
+    const pid = parseInt(readFileSync(LOCK_FILE, "utf-8"), 10);
+    if (Number.isInteger(pid) && pid > 0) {
+      try {
+        process.kill(pid, 0);
+      } catch (err: any) {
+        if (err?.code === "ESRCH") {
+          unlinkSync(LOCK_FILE);
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      unlinkSync(LOCK_FILE);
+    }
+  }
+
+  try {
+    lockFd = openSync(LOCK_FILE, "wx");
+    writeFileSync(lockFd, `${process.pid}\n`);
+  } catch (err: any) {
+    if (err?.code === "EEXIST") {
+      throw new Error(`indexer lock already held: ${LOCK_FILE}`);
+    }
+    throw err;
+  }
+}
+
+function releaseIndexerLock() {
+  if (lockFd === undefined) return;
+  closeSync(lockFd);
+  lockFd = undefined;
+  try {
+    unlinkSync(LOCK_FILE);
+  } catch (err: any) {
+    if (err?.code !== "ENOENT") throw err;
+  }
+}
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,8 +111,8 @@ async function saveLastBlock(block: number) {
 
 // ─── event handlers ────────────────────────────────────────────────────────────
 //
-// Each handler is idempotent: it uses upsert / @@unique to tolerate replays
-// during catch-up or restart.
+// Each handler is idempotent: it writes the Transaction marker inside the same
+// transaction as side effects, and treats @@unique replay failures as no-ops.
 
 interface EvtCtx { txHash: string; blockNumber: number; logIndex: number; }
 
@@ -76,53 +122,53 @@ async function handlePackOpened(args: any, ctx: EvtCtx) {
   const cardIds:   bigint[] = [...args.cardIds].map(BigInt);
   // rarities included in event but we derive from Card.rarity in DB
 
-  const block = await prisma.transaction.findUnique({
-    where: { txHash_logIndex: { txHash: ctx.txHash, logIndex: ctx.logIndex } },
-  });
-  if (block) return; // already indexed
-
   const ts = await blockTimestamp(ctx.blockNumber);
 
   // Insert MintedNFT for each token; bump Card.currentSupply.
   // Wrap in a transaction so a half-applied pack can't drift the counters.
-  await prisma.$transaction(async (tx) => {
-    for (let i = 0; i < tokenIds.length; i++) {
-      const tokenId = Number(tokenIds[i]);
-      const cardId  = Number(cardIds[i]);
-
-      const existing = await tx.mintedNFT.findUnique({ where: { tokenId } });
-      if (existing) continue;
-
-      await tx.mintedNFT.create({
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
         data: {
-          tokenId,
-          cardId,
-          owner:    buyer,
-          mintedTo: buyer,
-          mintedAt: ts,
-          txHash:   ctx.txHash,
+          type:        "pack_opened",
+          from:        buyer,
+          to:          null,
+          tokenIds:    JSON.stringify(tokenIds.map(Number)),
+          value:       "0", // pack price isn't in this event — we omit it
+          txHash:      ctx.txHash,
+          logIndex:    ctx.logIndex,
+          blockNumber: ctx.blockNumber,
+          timestamp:   ts,
         },
       });
-      await tx.card.update({
-        where: { id: cardId },
-        data:  { currentSupply: { increment: 1 } },
-      });
-    }
 
-    await tx.transaction.create({
-      data: {
-        type:        "pack_opened",
-        from:        buyer,
-        to:          null,
-        tokenIds:    JSON.stringify(tokenIds.map(Number)),
-        value:       "0", // pack price isn't in this event — we omit it
-        txHash:      ctx.txHash,
-        logIndex:    ctx.logIndex,
-        blockNumber: ctx.blockNumber,
-        timestamp:   ts,
-      },
+      for (let i = 0; i < tokenIds.length; i++) {
+        const tokenId = Number(tokenIds[i]);
+        const cardId  = Number(cardIds[i]);
+
+        const existing = await tx.mintedNFT.findUnique({ where: { tokenId } });
+        if (existing) continue;
+
+        await tx.mintedNFT.create({
+          data: {
+            tokenId,
+            cardId,
+            owner:    buyer,
+            mintedTo: buyer,
+            mintedAt: ts,
+            txHash:   ctx.txHash,
+          },
+        });
+        await tx.card.update({
+          where: { id: cardId },
+          data:  { currentSupply: { increment: 1 } },
+        });
+      }
     });
-  });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err)) return;
+    throw err;
+  }
 
   console.log(`[indexer] PackOpened ${ctx.txHash.slice(0, 10)} buyer=${buyer} cards=${cardIds.length}`);
 }
@@ -134,35 +180,39 @@ async function handleListed(args: any, ctx: EvtCtx) {
   const cardId  = Number(args.cardId);
   const ts      = await blockTimestamp(ctx.blockNumber);
 
-  await prisma.$transaction(async (tx) => {
-    // Cancel/Sold listings keep their row; a new "active" listing is a new row.
-    await tx.listing.create({
-      data: {
-        tokenId,
-        cardId,
-        seller,
-        price:    ethStr(price),
-        status:   "active",
-        listedAt: ts,
-        txHash:   ctx.txHash,
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          type:        "card_listed",
+          from:        seller,
+          to:          null,
+          tokenIds:    JSON.stringify([tokenId]),
+          value:       ethStr(price),
+          txHash:      ctx.txHash,
+          logIndex:    ctx.logIndex,
+          blockNumber: ctx.blockNumber,
+          timestamp:   ts,
+        },
+      });
+
+      // Cancel/Sold listings keep their row; a new "active" listing is a new row.
+      await tx.listing.create({
+        data: {
+          tokenId,
+          cardId,
+          seller,
+          price:    ethStr(price),
+          status:   "active",
+          listedAt: ts,
+          txHash:   ctx.txHash,
+        },
+      });
     });
-    await tx.transaction.upsert({
-      where:  { txHash_logIndex: { txHash: ctx.txHash, logIndex: ctx.logIndex } },
-      update: {},
-      create: {
-        type:        "card_listed",
-        from:        seller,
-        to:          null,
-        tokenIds:    JSON.stringify([tokenId]),
-        value:       ethStr(price),
-        txHash:      ctx.txHash,
-        logIndex:    ctx.logIndex,
-        blockNumber: ctx.blockNumber,
-        timestamp:   ts,
-      },
-    });
-  });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err)) return;
+    throw err;
+  }
 
   console.log(`[indexer] Listed token=${tokenId} seller=${seller} price=${ethStr(price)}`);
 }
@@ -174,43 +224,47 @@ async function handlePurchased(args: any, ctx: EvtCtx) {
   const price   = BigInt(args.salePrice);
   const ts      = await blockTimestamp(ctx.blockNumber);
 
-  await prisma.$transaction(async (tx) => {
-    // Mark the most recent active listing for this token as sold.
-    const active = await tx.listing.findFirst({
-      where:   { tokenId, status: "active" },
-      orderBy: { id: "desc" },
-    });
-    if (active) {
-      await tx.listing.update({
-        where: { id: active.id },
-        data:  {
-          status: "sold",
-          buyer,
-          soldAt: ts,
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          type:        "card_bought",
+          from:        buyer,
+          to:          seller,
+          tokenIds:    JSON.stringify([tokenId]),
+          value:       ethStr(price),
+          txHash:      ctx.txHash,
+          logIndex:    ctx.logIndex,
+          blockNumber: ctx.blockNumber,
+          timestamp:   ts,
         },
       });
-    }
-    // Update current owner. MintedNFT must exist (was inserted on PackOpened).
-    await tx.mintedNFT.updateMany({
-      where: { tokenId },
-      data:  { owner: buyer },
+
+      // Mark the most recent active listing for this token as sold.
+      const active = await tx.listing.findFirst({
+        where:   { tokenId, status: "active" },
+        orderBy: { id: "desc" },
+      });
+      if (active) {
+        await tx.listing.update({
+          where: { id: active.id },
+          data:  {
+            status: "sold",
+            buyer,
+            soldAt: ts,
+          },
+        });
+      }
+      // Update current owner. MintedNFT must exist (was inserted on PackOpened).
+      await tx.mintedNFT.updateMany({
+        where: { tokenId },
+        data:  { owner: buyer },
+      });
     });
-    await tx.transaction.upsert({
-      where:  { txHash_logIndex: { txHash: ctx.txHash, logIndex: ctx.logIndex } },
-      update: {},
-      create: {
-        type:        "card_bought",
-        from:        buyer,
-        to:          seller,
-        tokenIds:    JSON.stringify([tokenId]),
-        value:       ethStr(price),
-        txHash:      ctx.txHash,
-        logIndex:    ctx.logIndex,
-        blockNumber: ctx.blockNumber,
-        timestamp:   ts,
-      },
-    });
-  });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err)) return;
+    throw err;
+  }
 
   console.log(`[indexer] Purchased token=${tokenId} buyer=${buyer} price=${ethStr(price)}`);
 }
@@ -220,33 +274,37 @@ async function handleListingCancelled(args: any, ctx: EvtCtx) {
   const seller  = lower(args.seller);
   const ts      = await blockTimestamp(ctx.blockNumber);
 
-  await prisma.$transaction(async (tx) => {
-    const active = await tx.listing.findFirst({
-      where:   { tokenId, status: "active" },
-      orderBy: { id: "desc" },
-    });
-    if (active) {
-      await tx.listing.update({
-        where: { id: active.id },
-        data:  { status: "cancelled" },
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          type:        "card_cancelled",
+          from:        seller,
+          to:          null,
+          tokenIds:    JSON.stringify([tokenId]),
+          value:       "0",
+          txHash:      ctx.txHash,
+          logIndex:    ctx.logIndex,
+          blockNumber: ctx.blockNumber,
+          timestamp:   ts,
+        },
       });
-    }
-    await tx.transaction.upsert({
-      where:  { txHash_logIndex: { txHash: ctx.txHash, logIndex: ctx.logIndex } },
-      update: {},
-      create: {
-        type:        "card_cancelled",
-        from:        seller,
-        to:          null,
-        tokenIds:    JSON.stringify([tokenId]),
-        value:       "0",
-        txHash:      ctx.txHash,
-        logIndex:    ctx.logIndex,
-        blockNumber: ctx.blockNumber,
-        timestamp:   ts,
-      },
+
+      const active = await tx.listing.findFirst({
+        where:   { tokenId, status: "active" },
+        orderBy: { id: "desc" },
+      });
+      if (active) {
+        await tx.listing.update({
+          where: { id: active.id },
+          data:  { status: "cancelled" },
+        });
+      }
     });
-  });
+  } catch (err) {
+    if (isUniqueConstraintViolation(err)) return;
+    throw err;
+  }
 
   console.log(`[indexer] ListingCancelled token=${tokenId} seller=${seller}`);
 }
@@ -367,6 +425,7 @@ async function poll(provider: Provider, defs: EventDef[]) {
 }
 
 async function main() {
+  acquireIndexerLock();
   console.log(`[indexer] starting…`);
   console.log(`[indexer] addresses:`, {
     nft:         addresses.PokemonCardNFT,
@@ -386,6 +445,22 @@ async function main() {
 
 main().catch(async (err) => {
   console.error("[indexer] fatal:", err);
-  await prisma.$disconnect();
+  try {
+    await prisma.$disconnect();
+  } finally {
+    releaseIndexerLock();
+  }
   process.exit(1);
 });
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, async () => {
+    console.log(`[indexer] received ${signal}, shutting down`);
+    try {
+      await prisma.$disconnect();
+    } finally {
+      releaseIndexerLock();
+    }
+    process.exit(0);
+  });
+}

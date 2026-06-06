@@ -4,6 +4,7 @@
 import "dotenv/config";
 import express from "express";
 import cors    from "cors";
+import { rateLimit } from "express-rate-limit";
 
 import { cardsRouter }        from "./routes/cards.js";
 import { nftsRouter }         from "./routes/nfts.js";
@@ -11,11 +12,24 @@ import { listingsRouter }     from "./routes/listings.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { statsRouter }        from "./routes/stats.js";
 import { healthRouter }       from "./routes/health.js";
+import { rateLimitConfigFromEnv } from "./lib/rate-limit-config.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000", 10);
 
 const app = express();
+app.disable("x-powered-by");
 app.use(cors());
+const rateLimitConfig = rateLimitConfigFromEnv();
+app.use(rateLimit({
+  windowMs: rateLimitConfig.windowMs,
+  limit:    rateLimitConfig.limit,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many requests" },
+  // Don't throttle uptime probes — a monitor polling /api/health from one IP
+  // would otherwise burn the per-IP budget and start failing health checks.
+  skip: (req) => req.path === "/api/health",
+}));
 app.use(express.json());
 
 // Request log — minimal one-liner.
@@ -51,9 +65,17 @@ app.get("/", (_req, res) => {
 });
 
 // Centralised error handler.
-app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error(err);
-  res.status(500).json({ error: err.message ?? String(err) });
+  // Headers already flushed (e.g. error mid-stream): delegate to Express's
+  // default handler, which closes the connection. Writing again would throw.
+  if (res.headersSent) return next(err);
+  const status = Number(err.statusCode ?? err.status ?? 500);
+  const safeStatus = status >= 400 && status < 600 ? status : 500;
+  const message = process.env.NODE_ENV === "production"
+    ? "Internal server error"
+    : (err.message ?? String(err));
+  res.status(safeStatus).json({ error: message });
 });
 
 app.listen(PORT, () => {
