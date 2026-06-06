@@ -41,9 +41,12 @@ Cloud SQL and Cloud Run becomes viable. Not needed for a single-node deployment.
 - A Sepolia RPC endpoint. A public no-key endpoint
   (`https://ethereum-sepolia-rpc.publicnode.com`) works for a low-volume deployment;
   swap in a keyed Alchemy/Infura URL for reliability.
+- A **domain** you control (for TLS). HTTPS is **required** if the dApp connects a
+  wallet — see [step 9](#9-https-required-for-wallet-connect).
 
 Placeholders used below: `<PROJECT_ID>`, `<BILLING_ACCOUNT_ID>`, `<ORG_ID>`,
-`<ZONE>` (e.g. `asia-southeast1-a`), `<VM_EXTERNAL_IP>`, `<SSH_USER>`.
+`<ZONE>` (e.g. `asia-southeast1-a`), `<VM_EXTERNAL_IP>`, `<SSH_USER>`, `<DOMAIN>`
+(the punycode A-label form for an internationalized name — see step 9).
 
 ---
 
@@ -212,11 +215,16 @@ VITE_POKEMON_CARD_NFT_ADDRESS=0x...
 VITE_PAYMENT_SPLITTER_ADDRESS=0x...
 VITE_GACHA_PACK_ADDRESS=0x...
 VITE_MARKETPLACE_ADDRESS=0x...
-VITE_API_BASE_URL=http://<VM_EXTERNAL_IP>     # origin only; client appends /api/...
+VITE_API_BASE_URL=https://<DOMAIN>            # origin only; client appends /api/...
 ```
 
 > `VITE_API_BASE_URL` must be a non-empty absolute origin — an empty value makes the
 > frontend treat the API as unconfigured and fall back to direct on-chain reads.
+
+> Set this to the **final public origin**. If you're enabling TLS (step 9), use
+> `https://<DOMAIN>` and build *after* the cert is issued. A bare `http://<VM_EXTERNAL_IP>`
+> is fine only for a static-content smoke test — MetaMask won't connect on a
+> non-HTTPS origin (step 9).
 
 ```bash
 cd /opt/tcg/app/frontend
@@ -258,16 +266,60 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx && sudo systemctl enable nginx
 ```
 
+## 9. HTTPS (required for wallet connect)
+
+> **MetaMask only injects `window.ethereum` in a secure context** — HTTPS, or
+> `localhost` during dev. On a plain-HTTP origin (including a raw `http://<IP>`) the
+> provider is absent, so "Connect MetaMask" silently fails. If the dApp connects a
+> wallet, TLS is **mandatory**, not a hardening nicety.
+
+Point a DNS `A` record for your hostname at `<VM_EXTERNAL_IP>` and let it propagate.
+If the zone is behind Cloudflare, keep the record **DNS-only (grey-cloud)** so Let's
+Encrypt's HTTP-01 challenge reaches the VM directly — a proxied (orange-cloud) record
+terminates TLS at Cloudflare, and `dig +short A <host>` would return Cloudflare IPs
+instead of `<VM_EXTERNAL_IP>`.
+
+**Internationalized domains (IDN):** DNS, nginx, certbot, and the frontend env all
+need the **punycode (A-label)** form, not the Unicode name:
+
+```bash
+python3 -c "print('<DOMAIN_UNICODE>'.encode('idna').decode())"   # Unicode host → its xn-- A-label
+```
+
+Issue the certificate — certbot rewrites the nginx vhost to add the 443 server and an
+HTTP→HTTPS redirect, and installs an auto-renew timer:
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo sed -i 's/server_name _;/server_name <DOMAIN>;/' /etc/nginx/sites-available/tcg
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d <DOMAIN> --agree-tos --redirect \
+  --register-unsafely-without-email      # omit email to avoid storing PII
+```
+
+Then rebuild the frontend so the bundle calls the API over TLS (an HTTPS page calling
+an `http://` API is blocked as mixed content):
+
+```bash
+sed -i "s|VITE_API_BASE_URL=.*|VITE_API_BASE_URL=https://<DOMAIN>|" /opt/tcg/app/frontend/.env
+cd /opt/tcg/app/frontend && npm run build
+```
+
+Using `<DOMAIN>` (not the IP) here also decouples the bundle from the VM's IP: if the
+ephemeral IP changes, update the DNS `A` record only — no rebuild.
+
 ## Verify (from anywhere)
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://<VM_EXTERNAL_IP>/      # 200 (SPA)
-curl -s http://<VM_EXTERNAL_IP>/api/health                            # ok=true, lastBlock near tip
-curl -s http://<VM_EXTERNAL_IP>/api/stats                             # template/NFT/listing counts
-curl -s -o /dev/null -w "%{http_code}\n" http://<VM_EXTERNAL_IP>/marketplace  # 200 (try_files)
+curl -s -o /dev/null -w "HTTP %{http_code} ssl_verify=%{ssl_verify_result}\n" https://<DOMAIN>/   # 200, ssl_verify=0
+curl -s https://<DOMAIN>/api/health                                  # ok=true, lastBlock near tip
+curl -s https://<DOMAIN>/api/stats                                   # template/NFT/listing counts
+curl -s -o /dev/null -w "%{http_code}\n" https://<DOMAIN>/marketplace            # 200 (try_files)
+curl -s -o /dev/null -w "redirect %{http_code} -> %{redirect_url}\n" http://<DOMAIN>/   # 301 -> https
 ```
 
-`lastBlock` climbs during catch-up, then tracks the chain tip on the live poll.
+`ssl_verify=0` means the chain validated. `lastBlock` climbs during catch-up, then
+tracks the chain tip on the live poll.
 
 ---
 
@@ -298,23 +350,20 @@ from `DEPLOY_BLOCK`. A periodic copy to a bucket avoids paying that re-sync cost
 
 ## Hardening / follow-ups
 
-1. **Reserve a static IP.** The ephemeral external IP can change on stop/start, and
-   it is baked into the frontend bundle (`VITE_API_BASE_URL`) — a change breaks the
-   frontend until rebuilt. Promote it:
+1. **Reserve a static IP.** The external IP is ephemeral and can change on stop/start.
+   With TLS (step 9) the frontend targets `<DOMAIN>`, not the IP, so an IP change only
+   needs a DNS `A`-record update — no rebuild. A reserved static IP removes even that:
    ```bash
    gcloud compute addresses create tcg-ip --region=<REGION>
    # then assign it to the instance's access config
    ```
-2. **HTTPS.** This guide is HTTP-only. For a public deployment, point a domain at the
-   IP and run certbot (`sudo certbot --nginx -d <domain>`), then rebuild the frontend
-   with an `https://` API base.
-3. **`trust proxy`.** Behind nginx the rate limiter sees the proxy IP, so per-IP
+2. **`trust proxy`.** Behind nginx the rate limiter sees the proxy IP, so per-IP
    limiting collapses to a single shared bucket (hence the raised
    `API_RATE_LIMIT_MAX`). For correct per-IP limiting, set
    `app.set("trust proxy", 1)` in `backend/src/index.ts`.
-4. **Dedicated service user.** This guide runs the services as the login SSH user for
+3. **Dedicated service user.** This guide runs the services as the login SSH user for
    simplicity. To harden, create a `nologin` system user, `chown` `/opt/tcg` to it,
    and set `User=` in both units. (Low risk — the backend holds no keys and signs
    nothing; it is a read replica.)
-5. **Persist swap** across reboots by adding `/swapfile` to `/etc/fstab` (only needed
+4. **Persist swap** across reboots by adding `/swapfile` to `/etc/fstab` (only needed
    for builds, not at runtime).
