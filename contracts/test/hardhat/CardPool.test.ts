@@ -332,12 +332,10 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
   // ─── Royalties Configuration ──────────────────────────────────────────────
 
   describe("Royalties Configuration", function () {
-    it("allows adding a card with zero royalty receivers", async function () {
-      await nft.connect(admin).addCardToPool(makeTemplate(1, 0, 10), []);
-      await nft.connect(minter).mintCard(user.address, 1);
-      
-      const rxs = await nft.getRoyaltyReceivers(0);
-      expect(rxs.length).to.equal(0);
+    it("rejects adding a card with zero royalty receivers", async function () {
+      await expect(
+        nft.connect(admin).addCardToPool(makeTemplate(1, 0, 10), [])
+      ).to.be.revertedWithCustomError(nft, "EmptyReceivers");
     });
 
     it("handles multiple royalty receivers correctly", async function () {
@@ -370,25 +368,29 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       expect(stored.floorPrice).to.equal(ethers.parseEther("1.5"));
     });
 
-    it("preserves exact string fields (pokemonType, attack, imageURI)", async function () {
+    it("preserves exact string fields (pokemonType, imageURI on token; attack on template)", async function () {
       const tpl = makeTemplate(99, 4, 10);
       tpl.pokemonType = "Electric/Steel";
       tpl.attack = "Thunderbolt - 90";
       tpl.imageURI = "ipfs://custom-hash-123";
-      
+
       await nft.connect(admin).addCardToPool(tpl, [RX(user.address, 300)]);
       await nft.connect(minter).mintCard(user.address, 99);
-      
+
+      // pokemonType + imageURI live on the minted token's Card struct.
       const card = await nft.getCard(0);
       expect(card.pokemonType).to.equal("Electric/Steel");
-      expect(card.attack).to.equal("Thunderbolt - 90");
       expect(card.imageURI).to.equal("ipfs://custom-hash-123");
+
+      // attack is a template-only field (Card struct omits it to stay lightweight).
+      const stored = await nft.getCardTemplate(99);
+      expect(stored.attack).to.equal("Thunderbolt - 90");
     });
 
     it("reverts when querying getCard for a non-existent token", async function () {
-      await expect(
-        nft.getCard(999)
-      ).to.be.revertedWithCustomError(nft, "ERC721NonexistentToken").or.revertedWith("ERC721: invalid token ID");
+      await expect(nft.getCard(999))
+        .to.be.revertedWithCustomError(nft, "ERC721NonexistentToken")
+        .withArgs(999);
     });
   });
 });
