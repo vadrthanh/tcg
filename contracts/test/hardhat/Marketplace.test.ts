@@ -27,9 +27,10 @@ describe("Marketplace", function () {
   const PACK_PRICE     = ethers.parseEther("0.01");
   const PLATFORM_FEE_BPS = 250n; // 2.5 %
 
-  // Mints 5 cards via GachaPack; returns tokenId of first card (always 0 on first pack)
+  // Mints 5 cards via GachaPack (commit then reveal); first card is tokenId 0 on first pack
   async function openPackForSeller(): Promise<void> {
-    await gacha.connect(seller).openPack({ value: PACK_PRICE });
+    await gacha.connect(seller).commitPack({ value: PACK_PRICE });
+    await gacha.connect(seller).revealPack();
   }
 
   // Mint a card with known royalty receivers directly (for precise royalty tests)

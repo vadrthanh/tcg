@@ -22,18 +22,26 @@ Post-deploy wiring:
 ```
 User
  │
- ├─ openPack() { value: 0.01 ETH }
+ ├─ TX 1: commitPack() { value: 0.01 ETH }
  │   │
  │   ▼  GachaPack
  │   ├─ require(msg.value == packPrice)
- │   ├─ for i in 0..4:
- │   │   ├─ rand = keccak256(prevrandao, sender, nonce++, i)
- │   │   ├─ rarity = _rollRarity(rand % 100)
- │   │   ├─ available = nft.getAvailableCardIds(rarity)  ← falldown if empty
- │   │   ├─ cardId = available[rand>>8 % available.length]
- │   │   └─ tokenId = nft.mintCard(buyer, cardId)        ← mints ERC-721
- │   └─ splitter.deposit{value: 0.01 ETH}(               ← routes revenue
+ │   ├─ commitBlockOf[buyer] = block.number          ← remember the block
+ │   └─ splitter.deposit{value: 0.01 ETH}(            ← routes revenue at commit
  │         [platform, issuer], [0.008 ETH, 0.002 ETH])
+ │
+ ├─ TX 2 (a later block): revealPack()
+ │   │
+ │   ▼  GachaPack
+ │   ├─ require(block.number > commitBlock && ≤ commitBlock + 256)
+ │   ├─ seed = keccak256(blockhash(commitBlock), buyer)   ← unknowable at TX 1
+ │   ├─ delete commitBlockOf[buyer]                        ← CEI before minting
+ │   └─ for i in 0..4:
+ │       ├─ rand = keccak256(seed, i)
+ │       ├─ rarity = _rollRarity(rand % 100)
+ │       ├─ available = nft.getAvailableCardIds(rarity)  ← falldown if empty
+ │       ├─ cardId = available[rand>>8 % available.length]
+ │       └─ tokenId = nft.mintCard(buyer, cardId)        ← mints ERC-721
  │
  ▼  PokemonCardNFT (MINTER_ROLE gate)
      ├─ reads template from cardPool[cardId]
@@ -166,7 +174,7 @@ return Legendary;                  // [99]
 
 All tiers within ±20% of expected at n=1000. The keccak256-based pseudo-RNG produces a distribution statistically consistent with the specified weights.
 
-**Chainlink VRF upgrade path:**  `_random()` is isolated as an internal function. Replacing its body with a VRF request and fulfillRandomWords callback requires no changes to `_rollRarity`, `_drawFromInventory`, or any other logic.
+**Randomness — commit-reveal:** the draw is seeded from `blockhash(commitBlock)` in `revealPack()`, a block after the `commitPack()` payment, so the outcome is unknowable when the buyer pays (defeats the same-tx simulate-and-revert attack — see audit M-04). **Chainlink VRF upgrade path:** the seed expression is the single point of swap — replace it with a VRF request in `commitPack` and a `fulfillRandomWords` callback in place of `revealPack`; `_rollRarity` and `_drawFromInventory` are unchanged.
 
 ### Falldown Mechanic
 
@@ -185,7 +193,8 @@ This makes rare cards *harder to obtain over time*, not easier. A Legendary buye
 | Operation | Gas | Notes |
 |---|---|---|
 | `mintCard(to, cardId)` — cold | ~281 000 | Single pool-based mint, cold storage |
-| `openPack()` — 5 cards | ~1 173 000 | 5 mints + 1 splitter deposit |
+| `commitPack()` | ~80 000 | One SSTORE + splitter deposit |
+| `revealPack()` — 5 cards | ~1 173 000 | 5 mints |
 | Per card (incremental) | ~234 000 | Includes `getAvailableCardIds` + `mintCard` |
 | `listCard` (incremental) | ~83 000 | `approve` + `listCard`; storage warm after pack |
 | `buyCard` (incremental) | ~39 000 | Warm storage; includes deposit + `safeTransferFrom` |

@@ -49,6 +49,21 @@ contract GachaPackStatTest is Test {
         vm.deal(buyer, N_PACKS * PACK_PRICE + 10 ether);
     }
 
+    // ─── commit → reveal helper ───────────────────────────────────────────────
+    // openPack is now two steps. `entropy` becomes blockhash(commitBlock), the
+    // seed source — varying it per pack varies the draw (replacing the old
+    // vm.prevrandao knob).
+
+    function _openPack(address who, bytes32 entropy) internal {
+        vm.prank(who);
+        gacha.commitPack{value: PACK_PRICE}();
+        uint256 cb = block.number;
+        vm.roll(cb + 1);                 // reveal must be a later block than commit
+        vm.setBlockhash(cb, entropy);    // deterministic, non-zero seed source
+        vm.prank(who);
+        gacha.revealPack();
+    }
+
     // ─── Pool seeding ─────────────────────────────────────────────────────────
 
     function _makeTemplate(uint16 id, PokemonCardNFT.Rarity rarity, uint16 supply)
@@ -116,9 +131,7 @@ contract GachaPackStatTest is Test {
     ///         falls within ±20% of theoretical weights.
     function test_rarityDistribution() public {
         for (uint256 p; p < N_PACKS; ++p) {
-            vm.prevrandao(bytes32(uint256(keccak256(abi.encode("seed", p)))));
-            vm.prank(buyer);
-            gacha.openPack{value: PACK_PRICE}();
+            _openPack(buyer, keccak256(abi.encode("seed", p)));
         }
 
         uint256 cCommon; uint256 cUncommon; uint256 cRare;
@@ -157,10 +170,18 @@ contract GachaPackStatTest is Test {
         vm.deal(buyer, uint256(nPacks) * PACK_PRICE + 1 ether);
 
         for (uint256 p; p < nPacks; ++p) {
-            vm.prevrandao(bytes32(uint256(keccak256(abi.encode("fuzz", p)))));
+            // commit may revert (PendingCommitExists if a prior reveal failed and
+            // its commit still occupies the window); reveal may revert
+            // (AllCardsSoldOut once supply is exhausted). Both are fine here — the
+            // invariant must hold regardless of how many packs actually mint.
             vm.prank(buyer);
-            // Pack may revert AllCardsSoldOut if supply is exhausted — ignore that case.
-            try gacha.openPack{value: PACK_PRICE}() {} catch {}
+            try gacha.commitPack{value: PACK_PRICE}() {
+                uint256 cb = block.number;
+                vm.roll(cb + 1);
+                vm.setBlockhash(cb, keccak256(abi.encode("fuzz", p)));
+                vm.prank(buyer);
+                try gacha.revealPack() {} catch {}
+            } catch {}
         }
 
         // Assert invariant: no card's currentSupply > maxSupply
@@ -191,9 +212,7 @@ contract GachaPackStatTest is Test {
         vm.deal(buyer, SMALL_PACKS * PACK_PRICE);
 
         for (uint256 p; p < SMALL_PACKS; ++p) {
-            vm.prevrandao(bytes32(uint256(keccak256(abi.encode("rev", p)))));
-            vm.prank(buyer);
-            gacha.openPack{value: PACK_PRICE}();
+            _openPack(buyer, keccak256(abi.encode("rev", p)));
         }
 
         assertEq(address(splitter).balance, SMALL_PACKS * PACK_PRICE);

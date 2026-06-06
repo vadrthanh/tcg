@@ -161,8 +161,14 @@ contract MarketplaceFuzzTest is Test {
     // ─── Reentrancy: malicious buyer via onERC721Received ─────────────────
 
     function test_reentrancyOnBuyCard() public {
+        // commit → reveal mints tokens 0-4 to seller
         vm.prank(seller);
-        gacha.openPack{value: PACK_PRICE}();   // mints tokens 0-4 to seller
+        gacha.commitPack{value: PACK_PRICE}();
+        uint256 cb = block.number;
+        vm.roll(cb + 1);
+        vm.setBlockhash(cb, keccak256(abi.encode("mkt", seller)));
+        vm.prank(seller);
+        gacha.revealPack();
 
         uint256 tokenId = 0;
         uint256 price   = 1 ether;
