@@ -4,14 +4,14 @@ pragma solidity 0.8.24;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title PokemonCardNFT — ERC-721 + EIP-2981, multi-receiver royalties, on-chain card pool
-contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
+contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
 
     // ─── Constants ────────────────────────────────────────────────────────────
 
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant POOL_MANAGER_ROLE = keccak256("POOL_MANAGER_ROLE");
     uint96  public constant MAX_ROYALTY_BPS = 1000; // 10 %
 
     // ─── Types ────────────────────────────────────────────────────────────────
@@ -93,18 +93,18 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
 
     constructor(address admin)
         ERC721("PokemonCardNFT", "PKMN")
-        Ownable(admin)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(POOL_MANAGER_ROLE, admin);
     }
 
-    // ─── Pool management (owner only) ─────────────────────────────────────────
+    // ─── Pool management ──────────────────────────────────────────────────────
 
     /// @notice Add a single card template to the pool with its royalty receivers.
     function addCardToPool(
         CardTemplate    calldata template,
         RoyaltyReceiver[] calldata receivers
-    ) external onlyOwner {
+    ) external onlyRole(POOL_MANAGER_ROLE) {
         _validateAndStoreCard(template, receivers);
     }
 
@@ -115,7 +115,7 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
         CardTemplate[] calldata templates,
         address platformAddr, uint96 platformBps,
         address artistAddr,   uint96 artistBps
-    ) external onlyOwner {
+    ) external onlyRole(POOL_MANAGER_ROLE) {
         RoyaltyReceiver[] memory receivers = new RoyaltyReceiver[](2);
         receivers[0] = RoyaltyReceiver({ receiver: platformAddr, feeBps: platformBps });
         receivers[1] = RoyaltyReceiver({ receiver: artistAddr,   feeBps: artistBps  });
@@ -314,10 +314,10 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl, Ownable {
         returns (address receiver, uint256 royaltyAmount)
     {
         RoyaltyReceiver[] storage rxs = _royaltyReceivers[tokenId];
-        uint96 totalBps;
-        for (uint256 i; i < rxs.length; ++i) totalBps += rxs[i].feeBps;
-        receiver      = rxs.length > 0 ? rxs[0].receiver : address(0);
-        royaltyAmount = (salePrice * totalBps) / 10_000;
+        if (rxs.length == 0) return (address(0), 0);
+
+        receiver      = rxs[0].receiver;
+        royaltyAmount = (salePrice * rxs[0].feeBps) / 10_000;
     }
 
     function getRoyaltyReceivers(uint256 tokenId)

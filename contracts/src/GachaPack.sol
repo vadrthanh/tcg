@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./PokemonCardNFT.sol";
 import "./PaymentSplitter.sol";
@@ -42,7 +43,7 @@ import "./PaymentSplitter.sol";
 /// *harder* to obtain as the supply depletes — the first Legendary ever minted
 /// consumes one of the strictly limited supply slots. If ALL tiers are sold out,
 /// revealPack() reverts with AllCardsSoldOut().
-contract GachaPack is Ownable, ReentrancyGuard {
+contract GachaPack is Ownable, Pausable, ReentrancyGuard {
 
     // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ contract GachaPack is Ownable, ReentrancyGuard {
     ///         routed to the splitter immediately; the cards are drawn later in
     ///         revealPack(). The outcome is not knowable at this point.
     /// @dev A buyer may hold only one unrevealed, unexpired commit at a time.
-    function commitPack() external payable nonReentrant {
+    function commitPack() external payable whenNotPaused nonReentrant {
         if (msg.value != packPrice) revert WrongPayment(msg.value, packPrice);
 
         uint256 existing = commitBlockOf[msg.sender];
@@ -195,6 +196,14 @@ contract GachaPack is Ownable, ReentrancyGuard {
         issuer           = _issuer;
         platformFeeBps   = _platformFeeBps;
         emit RevenueConfigSet(_platformTreasury, _issuer, _platformFeeBps);
+    }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     // ─── Internal: rarity selection ───────────────────────────────────────────

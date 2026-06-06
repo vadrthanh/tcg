@@ -21,6 +21,9 @@ healthRouter.get("/", async (_req, res) => {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message ?? String(err) });
+    const message = process.env.NODE_ENV === "production"
+      ? "Internal server error"
+      : (err.message ?? String(err));
+    res.status(500).json({ ok: false, error: message });
   }
 });

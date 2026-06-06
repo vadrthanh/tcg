@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { prisma } from "../lib/db.js";
+import { asyncRoute } from "../lib/async-route.js";
 
 export const statsRouter = Router();
 
 // GET /api/stats — high-level totals
-statsRouter.get("/", async (_req, res) => {
+statsRouter.get("/", asyncRoute(async (_req, res) => {
   const [totalCards, totalMinted, totalListed, totalSold, claims] = await Promise.all([
     prisma.card.count(),
     prisma.mintedNFT.count(),
@@ -26,10 +27,10 @@ statsRouter.get("/", async (_req, res) => {
     totalListingsSold:     totalSold,
     totalRoyaltyClaimedEth,
   });
-});
+}));
 
 // GET /api/stats/rarity — remaining supply per rarity tier
-statsRouter.get("/rarity", async (_req, res) => {
+statsRouter.get("/rarity", asyncRoute(async (_req, res) => {
   const cards = await prisma.card.findMany({
     select: { rarity: true, maxSupply: true, currentSupply: true },
   });
@@ -43,4 +44,4 @@ statsRouter.get("/rarity", async (_req, res) => {
     b.cards     += 1;
   }
   res.json({ byRarity: buckets });
-});
+}));
