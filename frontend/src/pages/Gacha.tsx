@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Contract, formatEther } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, GACHA_ABI, NFT_ABI } from "../config/contracts";
+import { api, pollUntil } from "../lib/api";
 import { CardFlip } from "../components/CardFlip";
 import { txPending, txSuccess, txError } from "../components/TxToast";
 
@@ -65,6 +66,18 @@ export function Gacha({ wallet }: Props) {
       txSuccess(toastId, "Pack opened!");
       // Delay reveal for dramatic effect
       setTimeout(() => setRevealed(true), 600);
+
+      // Best-effort: wait for the indexer to see at least one of the new tokenIds
+      // so Inventory/Collection immediately reflect the new mint on next visit.
+      // Fire-and-forget — UI stays responsive even if the API is unreachable.
+      if (wallet.address && log) {
+        const newIds = new Set((log.args.tokenIds as bigint[]).map(t => Number(t)));
+        pollUntil(
+          () => api.nftsByOwner(wallet.address!),
+          rows => rows.some(r => newIds.has(r.tokenId)),
+          { attempts: 6, intervalMs: 2000 },
+        ).catch(() => {});
+      }
     } catch (e) {
       txError(toastId, e);
     } finally {
