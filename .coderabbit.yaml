@@ -1,0 +1,120 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration — Pokémon TCG Gacha NFT Marketplace
+# Docs: https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: en-US
+early_access: false
+tone_instructions: >
+  This is a university blockchain capstone. Be precise and educational: when you
+  flag an issue, briefly explain the underlying smart-contract or web3 security
+  principle so the author learns from it. Prioritize correctness and security
+  (reentrancy, access control, integer safety, fund accounting) over style nits.
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+
+  # Skip generated/vendored output — never review these.
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!contracts/artifacts/**"
+    - "!contracts/cache/**"
+    - "!contracts/out/**"
+    - "!contracts/typechain-types/**"
+    - "!contracts/coverage/**"
+    - "!contracts/deploy/addresses.json"
+    - "!frontend/src/abi/**"
+    - "!backend/abi/**"
+    - "!backend/prisma/migrations/**"
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/*.min.js"
+
+  # Domain-specific review guidance, applied per file glob.
+  path_instructions:
+    - path: "contracts/src/**/*.sol"
+      instructions: >
+        Enforce the project's MANDATORY security patterns:
+        (1) Checks-Effects-Interactions ordering on every function — validate,
+        then mutate state, then make external calls. Flag any external call or
+        ETH transfer that happens before state is updated.
+        (2) `nonReentrant` on every function that sends ETH or calls an external
+        contract.
+        (3) Pull-over-push: never loop over recipients sending ETH; all ETH
+        distribution must route through PaymentSplitter.deposit() with recipients
+        calling claim() themselves. Flag any loop that sends ETH.
+        (4) ETH must be sent via `(bool ok, ) = addr.call{value: x}("")` — flag any
+        use of `transfer()` or `send()` (2300 gas stipend).
+        (5) Custom errors only — flag every `require("string")` or `revert("string")`.
+        (6) Randomness must use `block.prevrandao`, never `block.timestamp`.
+        (7) Every state change must emit an event (the frontend depends on them).
+        (8) Confirm access control: only GachaPack may call mintCard; only approved
+        depositors may call PaymentSplitter.deposit; owner-only setters.
+        Also verify NatSpec on external/public functions, `immutable`/`constant`
+        usage, and that `delete` is called on storage no longer needed.
+    - path: "contracts/test/**/*.ts"
+      instructions: >
+        Tests use Hardhat + Chai + ethers v6. Verify they use loadFixture (never
+        deploy inside it()), assert reverts for every custom error, cover boundary
+        conditions (zero/max values), and assert events with .withArgs(...). Flag
+        ethers v5 style (ethers.utils.parseEther) — v6 uses ethers.parseEther.
+    - path: "contracts/test-foundry/**/*.sol"
+      instructions: >
+        Foundry fuzz/invariant tests. Check value-conservation invariants hold:
+        after buyCard, sellerProceeds + sum(royalties) + platformFee == salePrice
+        exactly. Confirm reentrancy attacker tests assert no over-withdrawal.
+    - path: "backend/src/**/*.ts"
+      instructions: >
+        Express + Prisma + ethers v6 event indexer / read-replica API. Check for:
+        unbounded eth_getLogs ranges, missing error handling on RPC calls,
+        SQL/query injection via unvalidated params, and that the indexer is
+        idempotent (re-processing a block must not double-count). Contract
+        addresses must be read from contracts/deploy/addresses.json, never
+        hardcoded.
+    - path: "frontend/src/**/*.{ts,tsx}"
+      instructions: >
+        Vite + React + TypeScript (strict) + ethers v6. Every write transaction
+        must surface pending/confirmed/failed state to the user (never silently
+        await tx.wait()). Verify chainId === 11155111 (Sepolia) checks on wallet
+        actions. Flag ethers v5 imports/style. Watch for missing dependency arrays
+        in hooks and unhandled promise rejections.
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  tools:
+    # Solidity linting
+    solhint:
+      enabled: true
+    # JS/TS linting (uses the repo's own eslint config when present)
+    eslint:
+      enabled: true
+    # Secret scanning — important since this repo handles private keys / RPC keys
+    gitleaks:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
