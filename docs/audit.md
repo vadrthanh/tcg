@@ -32,7 +32,7 @@ path and most negative-path cases. Two of the four contracts are essentially
 | **M-01** | Medium | EIP-2981 `royaltyInfo` returns total bps against a single receiver — external marketplaces will pay 100% to `rxs[0]` | Acknowledged |
 | **M-02** | Medium | `cardId == 0` sentinel collision between freeform mints and pool mints | **Fixed in this pass** (folded into H-01 fix) |
 | **M-03** | Medium | Stale-listing DoS — seller can transfer or revoke approval, leaving listing un-buyable and locking the new owner out of re-listing | Acknowledged |
-| **M-04** | Medium | `block.prevrandao` is validator-biaseable; a validator can skip a slot to re-roll | Acknowledged (VRF upgrade documented) |
+| **M-04** | High | Same-tx randomness let any contract caller simulate the draw and revert unless favourable → free re-rolls draining scarce tiers | **Fixed in this pass** (commit-reveal) |
 | L-01 | Low | `PaymentSplitter.deposit` does not reject `address(0)` receivers → ETH can be permanently locked | Open |
 | L-02 | Low | Missing zero-address checks in constructors (NFT admin, splitter admin, treasury, issuer, NFT addr, splitter addr) | Open |
 | L-03 | Low | `tokenURI` returns raw image URL, not an ERC-721-Metadata JSON URI | Open |
@@ -392,39 +392,53 @@ than during the trailing `safeTransferFrom`, saving them some gas.
 
 ---
 
-### M-04 — `block.prevrandao` is validator-biaseable
+### M-04 — Same-transaction randomness let a caller cherry-pick the draw (FIXED)
 
 | Field        | Value |
 |--------------|-------|
-| Severity     | **Medium** (mainnet) / Low (testnet) |
-| Likelihood   | Low (requires being block proposer and the marginal value to exceed slot-skip cost) |
-| Impact       | Medium (biased rarity outcomes; in extremis a validator can re-roll for Legendaries) |
-| Status       | Acknowledged — VRF upgrade path documented in code |
-| Location     | `GachaPack.sol:139-143` |
+| Severity     | **High** |
+| Likelihood   | High (any unprivileged contract caller; no special role needed) |
+| Impact       | High (free re-rolls drain the scarce Legendary/UltraRare tiers) |
+| Status       | **Fixed** — `openPack()` replaced by a `commitPack()` / `revealPack()` commit-reveal |
+| Location     | `GachaPack.sol` (`commitPack`, `revealPack`) |
 
-`block.prevrandao` is the post-Merge replacement for `block.difficulty` and
-exposes the previous block's RANDAO mix. A validator that knows it is about to
-propose a slot can:
+The original `openPack()` drew all 5 cards and minted them in the **same
+transaction** as the payment, seeded by
+`keccak256(block.prevrandao, msg.sender, nonce, salt)` — all inputs known at
+execution time. Two distinct attacks followed:
 
-1. Simulate the `openPack` outcome before publication.
-2. If unfavourable (e.g. did not produce a Legendary), **deliberately miss the
-   slot**, surrendering ~0.04 ETH of consensus rewards.
-3. The next proposer's `prevrandao` is now different — repeat.
+1. **Same-tx simulate-and-revert (the serious one).** `openPack()` had no
+   EOA restriction, so a wrapper contract could call it and, inside the
+   `onERC721Received` callback fired during minting, inspect the drawn rarities
+   and `revert` the whole transaction unless a high tier appeared. Because the
+   call was atomic, the attacker paid `packPrice` only on favourable outcomes
+   and paid nothing (just gas) otherwise — a free re-roll that drains the
+   strictly-limited Legendary/UltraRare supply. This needs no special
+   privileges and was the dominant risk.
+2. **Validator bias (secondary).** A block proposer can additionally grind
+   `block.prevrandao` by skipping slots. Far higher cost, validator-only.
 
-This becomes economically rational once the **expected marginal value of a
-re-roll** exceeds the slot-skip cost. With a Legendary at 1 % and a 1-of-1
-maxSupply, the value of a single Legendary pull can easily exceed 0.04 ETH on
-mainnet. Sepolia and the capstone demo are not exposed because slot rewards
-have no market value there.
+**Fix — commit-reveal.** A pack now opens in two transactions:
 
-The contract already documents the upgrade path: `_random` is isolated, and
-`_rollRarity` / `_drawFromInventory` are pure or view and accept any
-`uint256` seed. Swapping in Chainlink VRF (`VRFConsumerBaseV2`) requires
-changing only `_random` to enqueue a request and `openPack` to split into a
-request phase and a fulfilment phase (commit-reveal).
+- `commitPack()` takes `packPrice`, routes it to the splitter **immediately**,
+  and records the caller's commit block. No cards are drawn here.
+- `revealPack()`, in a *later* block, derives the seed from
+  `blockhash(commitBlock)` — a value that did not exist when the buyer paid —
+  then draws and mints. `RevealTooEarly` blocks a same-block reveal, so the
+  outcome can never be observed while the payment is still revertible.
 
-**Recommendation:** ship VRF before any mainnet deployment, even with low TVL.
-For Sepolia and academic submission, the current scheme is acceptable.
+Routing revenue at commit time also closes the "decline a bad pack by never
+revealing" variant: the price is already collected, so not revealing only
+forfeits the cards. A commit must be revealed within `REVEAL_WINDOW` (256
+blocks, the EVM blockhash horizon) or it expires and the buyer may commit
+again. `_rollRarity` / `_drawFromInventory` are unchanged.
+
+**Residual risk.** The proposer of the reveal block can still bias/withhold
+`blockhash(commitBlock)` — the same validator-only vector as (2) above, now the
+*only* remaining one. For mainnet value, replace the seed source in
+`revealPack()` with Chainlink VRF; both helper functions already accept any
+`uint256` seed, so no other changes are needed. For Sepolia and the academic
+submission, commit-reveal is sufficient.
 
 ---
 
@@ -668,7 +682,7 @@ branch is harmless. Noted for completeness — no remediation needed.
 |---|---|
 | Location          | `GachaPack.sol:184-197` |
 
-`_routeRevenue` is called only from `openPack`, which has already validated
+`_routeRevenue` is called only from `commitPack`, which has already validated
 `msg.value == packPrice`. Reading `msg.value` again inside the helper is safe
 today but tightens the coupling between caller and callee — if another path
 ever calls `_routeRevenue` without an upstream check, the behaviour is opaque.
@@ -698,13 +712,14 @@ EIP-2981 convention. No change recommended; called out so a future
 |---------------------------------------|-------|---------|
 | `PaymentSplitter.claim`               | check → zero balance → external `call` | Correct. Two-layer: CEI + `nonReentrant`. |
 | `Marketplace.buyCard`                 | check listing/value → delete listing → deposit (mutates external storage) → `safeTransferFrom` (external) | Correct. `delete` happens before any external call; `safeTransferFrom` is last so its callback cannot mutate listing/splitter state. |
-| `GachaPack.openPack`                  | check value → mint × 5 (external, triggers `onERC721Received`) → deposit | Acceptable under `nonReentrant`. No state in `GachaPack` is exposed to the reentrant callback (the only mutable state is `_nonce`, which the callback would only advance further — no value at risk). |
+| `GachaPack.commitPack`                | check value → record commit block → deposit (external) | Correct under `nonReentrant`. The commit is written before the splitter deposit; revenue routing is the only external call. |
+| `GachaPack.revealPack`                | check commit/window → delete commit → mint × 5 (external, triggers `onERC721Received`) | Correct. The commit is `delete`d before any mint, so the `onERC721Received` callback sees no pending commit and cannot re-enter to double-reveal. Also `nonReentrant`. |
 | `PokemonCardNFT._mintCardInternal`    | write `_cards`, `tokenCardId`, `_royaltyReceivers` → `_safeMint` (external) → emit | Correct. Effects before external call — a previous version had effects after, fixed in a prior audit pass per `docs/audit.md`. |
 
 ### 5.2 Reentrancy guards
 
 `ReentrancyGuard` applied to: `PaymentSplitter.claim`, `Marketplace.buyCard`,
-`GachaPack.openPack`. `PaymentSplitter.deposit` correctly omits the guard
+`GachaPack.commitPack`, `GachaPack.revealPack`. `PaymentSplitter.deposit` correctly omits the guard
 (it has no external call), as does the entire `PokemonCardNFT` (no value
 flows through it).
 
@@ -821,7 +836,7 @@ admin role on the splitter. The capstone demo can keep the EOA.
 |-----------------------|----------|--------------------------------------------|---------|
 | `reentrancy-benign`   | Medium   | `_mintCardInternal` state writes after `_safeMint` | **Fixed** in prior pass — CEI reordered |
 | `reentrancy-events`   | Info     | Events emitted after `_safeMint`           | Accepted — standard ERC-721 pattern |
-| `calls-loop`          | Medium   | `nft.mintCard` inside `openPack` loop      | False positive — bounded at `CARDS_PER_PACK = 5` |
+| `calls-loop`          | Medium   | `nft.mintCard` inside `revealPack` loop    | False positive — bounded at `CARDS_PER_PACK = 5` |
 | `uninitialized-local` | Medium   | Default-zero locals                        | False positive — Solidity initialises locals to 0 |
 | `locked-ether`        | Medium   | `ReentrancyAttacker` has no withdraw       | Test-only contract |
 | `missing-zero-check`  | Low      | Treasury / issuer / admin addresses        | Accepted (see L-01, L-02) |
@@ -888,7 +903,9 @@ contracts), but the admin keys hold genuine power:
 
 If this codebase were to leave the capstone context for a real deployment:
 
-1. [ ] Replace `block.prevrandao` with Chainlink VRF (M-04).
+1. [x] Remove same-tx randomness — commit-reveal shipped (M-04).
+   [ ] For real value, further replace the `blockhash` seed in `revealPack()`
+       with Chainlink VRF to remove the residual validator-bias vector.
 2. [ ] Decide M-01 disposition (drop EIP-2981 advertising, or implement a
        splitter-routed `royaltyInfo`).
 3. [ ] Add the stale-listing eviction path (M-03).
