@@ -13,6 +13,7 @@ contracts/typechain-types/
 contracts/gas-report.txt
 contracts/coverage/
 contracts/coverage.json
+contracts/deploy/addresses.json
 
 # Foundry
 contracts/out/
@@ -30,7 +31,7 @@ contracts/.cache_forge/
 # Misc
 .DS_Store
 *.log
+.indexer.lock
 database.json
 instruction.md
 CLAUDE.md
-

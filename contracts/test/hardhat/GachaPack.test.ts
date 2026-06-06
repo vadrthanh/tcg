@@ -426,5 +426,30 @@ describe("GachaPack", function () {
         gacha.connect(buyer).setPackPrice(ethers.parseEther("0.05"))
       ).to.be.revertedWithCustomError(gacha, "OwnableUnauthorizedAccount");
     });
+
+    it("owner can pause and unpause pack operations", async function () {
+      await gacha.connect(admin).pause();
+
+      await expect(
+        gacha.connect(buyer).commitPack({ value: PACK_PRICE })
+      ).to.be.revertedWithCustomError(gacha, "EnforcedPause");
+
+      await gacha.connect(admin).unpause();
+
+      await expect(
+        gacha.connect(buyer).commitPack({ value: PACK_PRICE })
+      ).to.emit(gacha, "PackCommitted");
+    });
+
+    it("pause allows revealPack for already-paid pending commits", async function () {
+      await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      await gacha.connect(admin).pause();
+
+      await expect(
+        gacha.connect(buyer).revealPack()
+      ).to.emit(gacha, "PackOpened");
+
+      expect(await nft.balanceOf(buyer.address)).to.equal(5);
+    });
   });
 });

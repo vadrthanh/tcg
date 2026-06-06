@@ -10,6 +10,7 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
   let user: HardhatEthersSigner;
 
   const MINTER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE"));
+  const POOL_MANAGER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("POOL_MANAGER_ROLE"));
 
   // Helper: build a CardTemplate with configurable maxSupply
   function makeTemplate(
@@ -80,10 +81,17 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       expect(legendary[0]).to.equal(20);
     });
 
-    it("reverts if non-owner tries to add", async function () {
+    it("reverts if non-pool-manager tries to add", async function () {
       await expect(
         nft.connect(user).addCardToPool(makeTemplate(1, 0, 100), [RX(user.address, 300)])
-      ).to.be.revertedWithCustomError(nft, "OwnableUnauthorizedAccount");
+      ).to.be.revertedWithCustomError(nft, "AccessControlUnauthorizedAccount");
+    });
+
+    it("succeeds after POOL_MANAGER_ROLE is granted", async function () {
+      await nft.connect(admin).grantRole(POOL_MANAGER_ROLE, user.address);
+      await expect(
+        nft.connect(user).addCardToPool(makeTemplate(1, 0, 100), [RX(user.address, 300)])
+      ).to.emit(nft, "CardAddedToPool");
     });
 
     // ── H-01 regression: write-once template, no supply-reset attack ──────
