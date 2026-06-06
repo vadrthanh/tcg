@@ -4,7 +4,9 @@ const MAX_RATE_LIMIT_WINDOW_MS = 86_400_000;
 const MAX_RATE_LIMIT_MAX = 100_000;
 
 export function parsePositiveInt(value: string | undefined, fallback: number, max: number) {
-  const parsed = parseInt(value ?? "", 10);
+  // Number() (not parseInt) so "1.9" / "123abc" fall back to the default
+  // instead of being silently truncated to 1 / 123.
+  const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
   return Math.min(parsed, max);
 }
