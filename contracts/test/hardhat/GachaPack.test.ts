@@ -441,6 +441,18 @@ describe("GachaPack", function () {
       ).to.emit(gacha, "PackCommitted");
     });
 
+    it("non-owner cannot pause or unpause pack operations", async function () {
+      await expect(
+        gacha.connect(buyer).pause()
+      ).to.be.revertedWithCustomError(gacha, "OwnableUnauthorizedAccount");
+
+      await gacha.connect(admin).pause();
+
+      await expect(
+        gacha.connect(buyer).unpause()
+      ).to.be.revertedWithCustomError(gacha, "OwnableUnauthorizedAccount");
+    });
+
     it("pause allows revealPack for already-paid pending commits", async function () {
       await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
       await gacha.connect(admin).pause();
