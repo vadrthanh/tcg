@@ -12,15 +12,17 @@ import { listingsRouter }     from "./routes/listings.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { statsRouter }        from "./routes/stats.js";
 import { healthRouter }       from "./routes/health.js";
+import { rateLimitConfigFromEnv } from "./lib/rate-limit-config.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000", 10);
 
 const app = express();
 app.disable("x-powered-by");
 app.use(cors());
+const rateLimitConfig = rateLimitConfigFromEnv();
 app.use(rateLimit({
-  windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS ?? "900000", 10),
-  limit:    parseInt(process.env.API_RATE_LIMIT_MAX ?? "100", 10),
+  windowMs: rateLimitConfig.windowMs,
+  limit:    rateLimitConfig.limit,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { error: "Too many requests" },

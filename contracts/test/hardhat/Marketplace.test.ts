@@ -462,6 +462,18 @@ describe("Marketplace", function () {
       ).to.emit(market, "Listed");
     });
 
+    it("non-owner cannot pause or unpause marketplace operations", async function () {
+      await expect(
+        market.connect(seller).pause()
+      ).to.be.revertedWithCustomError(market, "OwnableUnauthorizedAccount");
+
+      await market.connect(admin).pause();
+
+      await expect(
+        market.connect(seller).unpause()
+      ).to.be.revertedWithCustomError(market, "OwnableUnauthorizedAccount");
+    });
+
     it("pause blocks purchases", async function () {
       await market.connect(seller).listCard(0, ethers.parseEther("0.5"));
       await market.connect(admin).pause();

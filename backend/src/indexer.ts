@@ -19,11 +19,11 @@ import "dotenv/config";
 
 import { openSync, closeSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Prisma } from "@prisma/client";
 import { type EventLog, type Log, type Provider } from "ethers";
 import { prisma } from "./lib/db.js";
 import { addresses } from "./lib/addresses.js";
 import { makeProvider, makeContracts } from "./lib/contracts.js";
+import { isUniqueConstraintViolation } from "./lib/prisma-errors.js";
 
 const BATCH = parseInt(process.env.INDEXER_BATCH_BLOCKS ?? "2000", 10);
 const POLL  = parseInt(process.env.INDEXER_POLL_INTERVAL_MS ?? "15000", 10);
@@ -69,10 +69,6 @@ function releaseIndexerLock() {
   } catch (err: any) {
     if (err?.code !== "ENOENT") throw err;
   }
-}
-
-function isUniqueConstraintViolation(err: unknown) {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
@@ -449,16 +445,22 @@ async function main() {
 
 main().catch(async (err) => {
   console.error("[indexer] fatal:", err);
-  await prisma.$disconnect();
-  releaseIndexerLock();
+  try {
+    await prisma.$disconnect();
+  } finally {
+    releaseIndexerLock();
+  }
   process.exit(1);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, async () => {
     console.log(`[indexer] received ${signal}, shutting down`);
-    await prisma.$disconnect();
-    releaseIndexerLock();
+    try {
+      await prisma.$disconnect();
+    } finally {
+      releaseIndexerLock();
+    }
     process.exit(0);
   });
 }
