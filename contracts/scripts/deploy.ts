@@ -11,6 +11,36 @@ const RARITY_MAP: Record<string, number> = {
   Common: 0, Uncommon: 1, Rare: 2, UltraRare: 3, Legendary: 4,
 };
 
+/// Merge the given key=value pairs into frontend/.env, preserving any other
+/// lines (e.g. VITE_API_BASE_URL) and comments. Seeds from frontend/.env.example
+/// when no .env exists yet. The frontend reads addresses from VITE_* env vars
+/// (not deploy/addresses.json), so this is what makes the UI target the live
+/// contracts after a deploy — see CLAUDE.md.
+function upsertFrontendEnv(vars: Record<string, string>) {
+  const envPath     = path.join(__dirname, "../../frontend/.env");
+  const examplePath = path.join(__dirname, "../../frontend/.env.example");
+
+  let lines: string[] = [];
+  if (fs.existsSync(envPath)) {
+    lines = fs.readFileSync(envPath, "utf-8").split("\n");
+  } else if (fs.existsSync(examplePath)) {
+    lines = fs.readFileSync(examplePath, "utf-8").split("\n");
+  }
+
+  const remaining = new Set(Object.keys(vars));
+  const updated = lines.map((line) => {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=/);
+    if (m && vars[m[1]] !== undefined) {
+      remaining.delete(m[1]);
+      return `${m[1]}=${vars[m[1]]}`;
+    }
+    return line;
+  });
+  for (const key of remaining) updated.push(`${key}=${vars[key]}`);
+
+  fs.writeFileSync(envPath, updated.join("\n"));
+}
+
 // Royalty receivers: platform gets 300 bps (3%), artist gets 200 bps (2%)
 // In production replace these with real addresses.
 async function main() {
@@ -118,7 +148,19 @@ async function main() {
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
   const outPath = path.join(outDir, "addresses.json");
   fs.writeFileSync(outPath, JSON.stringify(addresses, null, 2));
-  console.log("\n7. Addresses saved to deploy/addresses.json");
+  console.log("\n7. Addresses saved to deploy/addresses.json (backend read replica)");
+
+  // Mirror addresses into frontend/.env so the UI targets the live contracts
+  // immediately (L-07): without this the frontend keeps all-zero VITE_* vars
+  // and every call silently targets the zero address.
+  upsertFrontendEnv({
+    VITE_CHAIN_ID:                 String(addresses.chainId),
+    VITE_POKEMON_CARD_NFT_ADDRESS: nftAddr,
+    VITE_PAYMENT_SPLITTER_ADDRESS: splitterAddr,
+    VITE_GACHA_PACK_ADDRESS:       gachaAddr,
+    VITE_MARKETPLACE_ADDRESS:      marketAddr,
+  });
+  console.log("   Frontend VITE_* addresses synced to frontend/.env");
 
   // ── 8. Summary ────────────────────────────────────────────────────────────
   console.log("\n" + "─".repeat(60));
