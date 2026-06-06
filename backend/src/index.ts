@@ -4,6 +4,7 @@
 import "dotenv/config";
 import express from "express";
 import cors    from "cors";
+import { rateLimit } from "express-rate-limit";
 
 import { cardsRouter }        from "./routes/cards.js";
 import { nftsRouter }         from "./routes/nfts.js";
@@ -15,7 +16,15 @@ import { healthRouter }       from "./routes/health.js";
 const PORT = parseInt(process.env.PORT ?? "4000", 10);
 
 const app = express();
+app.disable("x-powered-by");
 app.use(cors());
+app.use(rateLimit({
+  windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS ?? "900000", 10),
+  limit:    parseInt(process.env.API_RATE_LIMIT_MAX ?? "100", 10),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { error: "Too many requests" },
+}));
 app.use(express.json());
 
 // Request log — minimal one-liner.
@@ -53,7 +62,12 @@ app.get("/", (_req, res) => {
 // Centralised error handler.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-  res.status(500).json({ error: err.message ?? String(err) });
+  const status = Number(err.statusCode ?? err.status ?? 500);
+  const safeStatus = status >= 400 && status < 600 ? status : 500;
+  const message = process.env.NODE_ENV === "production"
+    ? "Internal server error"
+    : (err.message ?? String(err));
+  res.status(safeStatus).json({ error: message });
 });
 
 app.listen(PORT, () => {

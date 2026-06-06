@@ -441,4 +441,34 @@ describe("Marketplace", function () {
       expect(details.name.length).to.be.gt(0);
     });
   });
+
+  describe("pause", function () {
+    beforeEach(async function () {
+      await openPackForSeller();
+      await nft.connect(seller).approve(market.target, 0);
+    });
+
+    it("owner can pause and unpause listing", async function () {
+      await market.connect(admin).pause();
+
+      await expect(
+        market.connect(seller).listCard(0, ethers.parseEther("0.5"))
+      ).to.be.revertedWithCustomError(market, "EnforcedPause");
+
+      await market.connect(admin).unpause();
+
+      await expect(
+        market.connect(seller).listCard(0, ethers.parseEther("0.5"))
+      ).to.emit(market, "Listed");
+    });
+
+    it("pause blocks purchases", async function () {
+      await market.connect(seller).listCard(0, ethers.parseEther("0.5"));
+      await market.connect(admin).pause();
+
+      await expect(
+        market.connect(buyer).buyCard(0, { value: ethers.parseEther("0.5") })
+      ).to.be.revertedWithCustomError(market, "EnforcedPause");
+    });
+  });
 });

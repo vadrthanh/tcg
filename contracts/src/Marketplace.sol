@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./PokemonCardNFT.sol";
 import "./PaymentSplitter.sol";
@@ -14,7 +15,7 @@ import "./PaymentSplitter.sol";
 ///   • All ETH credited to PaymentSplitter (pull-payment) — no push loops
 ///   • safeTransferFrom after deposit: if NFT transfer reverts, EVM unwinds the
 ///     deposit, preserving atomicity
-contract Marketplace is Ownable, ReentrancyGuard {
+contract Marketplace is Ownable, Pausable, ReentrancyGuard {
 
     // ─── Constants ────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ contract Marketplace is Ownable, ReentrancyGuard {
 
     /// @notice Create a listing. Caller must own the card and have approved this
     ///         contract (via approve or setApprovalForAll) before calling.
-    function listCard(uint256 tokenId, uint256 price) external {
+    function listCard(uint256 tokenId, uint256 price) external whenNotPaused {
         if (price == 0) revert PriceZero();
         if (nft.ownerOf(tokenId) != msg.sender) revert NotOwner(tokenId);
         if (
@@ -120,7 +121,7 @@ contract Marketplace is Ownable, ReentrancyGuard {
     // ─── Atomic swap ─────────────────────────────────────────────────────────
 
     /// @notice Buy a listed card. msg.value must equal the listing price exactly.
-    function buyCard(uint256 tokenId) external payable nonReentrant {
+    function buyCard(uint256 tokenId) external payable whenNotPaused nonReentrant {
         // ── 1. Checks ──────────────────────────────────────────────────────────
         Listing memory listing = listings[tokenId];
         if (listing.price == 0)         revert NotListed(tokenId);
@@ -211,5 +212,13 @@ contract Marketplace is Ownable, ReentrancyGuard {
         platformTreasury = _treasury;
         platformFeeBps   = _feeBps;
         emit PlatformConfigSet(_treasury, _feeBps);
+    }
+
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
     }
 }
