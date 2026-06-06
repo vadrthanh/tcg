@@ -55,20 +55,22 @@ This is the blockchain capstone project for IT4527E at university. It demonstrat
 | Ultra Rare | 4 % | 6 | 20 – 30 | 0.08 – 0.12 ETH |
 | Legendary | 1 % | 5 | 3 – 8 | 0.3 – 0.8 ETH |
 
-**Falldown rule:** when a rolled tier has zero remaining supply, the gacha gives the next-lower tier instead. Legendary → Ultra Rare → Rare → Uncommon → Common. If all tiers are sold out, `openPack()` reverts with `AllCardsSoldOut`.
+**Falldown rule:** when a rolled tier has zero remaining supply, the gacha gives the next-lower tier instead. Legendary → Ultra Rare → Rare → Uncommon → Common. If all tiers are sold out, `revealPack()` reverts with `AllCardsSoldOut`.
 
 ---
 
 ## How the Gacha Works
 
-1. **Pay** — user sends exactly `packPrice` ETH to `GachaPack.openPack()`.
-2. **Roll rarity** — for each of 5 cards, a `keccak256(prevrandao, sender, nonce, salt)` hash is taken mod 100 and mapped against the cumulative weight table `[60, 85, 95, 99, 100]`.
-3. **Check inventory** — `PokemonCardNFT.getAvailableCardIds(rarity)` returns pool cardIds with `currentSupply < maxSupply`.
-4. **Falldown** — if the rolled tier is sold out, try the next-lower tier. Repeat until stock is found or all tiers exhausted.
-5. **Pick card** — select a random cardId from available cards using `pickSeed % available.length`.
-6. **Mint** — `nft.mintCard(buyer, cardId)` reads the template, increments `currentSupply`, and mints the ERC-721 token.
-7. **Route revenue** — pack price is split between platform treasury and issuer via `PaymentSplitter.deposit()`.
-8. **Reveal** — `PackOpened(buyer, tokenIds, cardIds, rarities)` event triggers the frontend card-flip animation.
+A pack opens in **two transactions** (commit-reveal) so the draw is unknowable when you pay — see [`docs/gacha-algorithm.md`](docs/gacha-algorithm.md).
+
+1. **Commit & pay** — user sends exactly `packPrice` ETH to `GachaPack.commitPack()`, which records the commit block and routes the revenue to the splitter immediately.
+2. **Reveal** — in a later block, `GachaPack.revealPack()` seeds the draw from `keccak256(blockhash(commitBlock), buyer)` — a value that did not exist at commit time, so the outcome can't be simulated and reverted.
+3. **Roll rarity** — for each of 5 cards, a per-card `keccak256(seed, i)` hash is taken mod 100 and mapped against the cumulative weight table `[60, 85, 95, 99, 100]`.
+4. **Check inventory** — `PokemonCardNFT.getAvailableCardIds(rarity)` returns pool cardIds with `currentSupply < maxSupply`.
+5. **Falldown** — if the rolled tier is sold out, try the next-lower tier. Repeat until stock is found or all tiers exhausted.
+6. **Pick card** — select a random cardId from available cards using `pickSeed % available.length`.
+7. **Mint** — `nft.mintCard(buyer, cardId)` reads the template, increments `currentSupply`, and mints the ERC-721 token.
+8. **Reveal event** — `PackOpened(buyer, tokenIds, cardIds, rarities)` triggers the frontend card-flip animation.
 
 > **VRF upgrade path:** `_random()` is an isolated internal function. Replace its body with a Chainlink VRF callback and nothing else changes.
 

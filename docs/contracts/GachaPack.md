@@ -1,25 +1,31 @@
 # `GachaPack.sol`
 
-Pay-to-open contract: accept `packPrice` ETH, mint exactly
-`CARDS_PER_PACK = 5` cards drawn from the live pool by weighted RNG, and route
-the ETH through the `PaymentSplitter` to the platform treasury and the issuer.
+Pay-to-open contract using a **two-step commit-reveal**: `commitPack()` accepts
+`packPrice` ETH and records the commit block; `revealPack()`, a block later,
+mints exactly `CARDS_PER_PACK = 5` cards drawn from the live pool by weighted
+RNG seeded from `blockhash(commitBlock)`. Pack revenue is routed through the
+`PaymentSplitter` to the platform treasury and the issuer at commit time.
+
+The split exists so the draw outcome is unknowable when the buyer pays —
+defeating the same-tx "simulate then revert unless favourable" attack
+(see [audit M-04](../audit.md)).
 
 - **Inherits:** `Ownable`, `ReentrancyGuard` (OpenZeppelin v5)
 - **Solidity:** `0.8.24`
-- **Lines:** 198
 
 ---
 
 ## 1. Purpose & scope
 
-- Single entry point for end-users: `openPack()`.
-- Picks 5 cards per call: roll a rarity tier, then draw a specific card from
+- Two entry points for end-users: `commitPack()` (pay) then `revealPack()`
+  (draw + mint), in separate blocks.
+- `revealPack` picks 5 cards: roll a rarity tier, then draw a specific card from
   the live inventory at that tier (with falldown to lower tiers if the rolled
   tier is sold out).
-- Forwards the entire `msg.value` to the splitter, split between
+- Forwards the entire `msg.value` to the splitter at commit, split between
   `platformTreasury` and `issuer` according to `platformFeeBps`.
 
-**Not responsible for:** ETH custody (transient — same-tx forwarding), card
+**Not responsible for:** ETH custody (never held — forwarded at commit), card
 metadata, listing, or royalty distribution on resale.
 
 ---
@@ -31,6 +37,7 @@ metadata, listing, or royalty distribution on resale.
 | Slot | Value | Notes |
 |------|-------|-------|
 | `CARDS_PER_PACK`   | `5`  | Fixed pack size, drives the loop bound |
+| `REVEAL_WINDOW`    | `256`| Max blocks between commit and reveal (EVM blockhash horizon) |
 | `W_COMMON`         | `60` | Cumulative weight breakpoint |
 | `W_UNCOMMON`       | `85` | "" |
 | `W_RARE`           | `95` | "" |
@@ -51,34 +58,56 @@ metadata, listing, or royalty distribution on resale.
 | `platformTreasury`| `address` | Owner-configurable |
 | `issuer`          | `address` | Owner-configurable |
 | `platformFeeBps`  | `uint256` | Platform share of pack revenue; cap is `10_000` — **see audit I-03** |
-| `_nonce`          | `uint256` | Monotonic counter feeding the RNG; private |
+| `commitBlockOf`   | `mapping(address => uint256)` | Block of each buyer's unrevealed commit (0 = none); public |
 
 ---
 
 ## 3. External / public API
 
-### `openPack() payable nonReentrant`
+### `commitPack() payable nonReentrant`
 
-The single user-facing entry point.
+Step 1 — pay and lock in a commit block. No cards drawn here.
 
 ```
-1. Check: msg.value == packPrice                 → WrongPayment
-2. For i in 0..4:
-     rand   = _random(i)                          // increments _nonce
+1. Check: msg.value == packPrice                          → WrongPayment
+2. Check: no in-window unrevealed commit for msg.sender   → PendingCommitExists
+3. commitBlockOf[msg.sender] = block.number
+4. _routeRevenue()                                        // splitter.deposit{value:} now
+5. Emit PackCommitted(buyer, block.number)
+```
+
+Revenue is routed up front so that declining an unfavourable outcome by simply
+never revealing only forfeits the cards — the price is already collected.
+
+### `revealPack() nonReentrant`
+
+Step 2 — draw and mint, in a later block than the commit.
+
+```
+1. commitBlock = commitBlockOf[msg.sender]
+2. Check: commitBlock != 0                        → NoPendingCommit
+3. Check: block.number  >  commitBlock            → RevealTooEarly
+4. Check: block.number <= commitBlock + 256       → CommitExpired
+5. seed = keccak256(blockhash(commitBlock), msg.sender)   // non-zero in window
+6. delete commitBlockOf[msg.sender]               // CEI — clear before minting
+7. For i in 0..4:
+     rand   = keccak256(seed, i)
      rolled = _rollRarity(rand)
      (cardId, actual) = _drawFromInventory(rolled, rand >> 8)
      tokenId = nft.mintCard(msg.sender, cardId)   // external — triggers onERC721Received
-3. _routeRevenue()                                // splitter.deposit{value:}
-4. Emit PackOpened(buyer, tokenIds, cardIds, rarities)
+8. Emit PackOpened(buyer, tokenIds, cardIds, rarities)
 ```
 
-Reentrancy: `nonReentrant` is required because `mintCard` triggers an
-`onERC721Received` callback on the buyer when the buyer is a contract. The
-only mutable state in this contract that could be touched by a reentrant call
-is `_nonce`, which is monotonic — an attacker can advance it further but
-cannot gain anything from doing so.
+Security: because the seed comes from `blockhash(commitBlock)`, which did not
+exist when the buyer paid in the prior block, the outcome cannot be simulated
+at payment time. `RevealTooEarly` forbids revealing in the commit block, so a
+wrapper contract cannot pay and inspect the draw in a single transaction.
 
-Gas: ~1.17 M for a full pack open (5 mints + 1 deposit). Bounded.
+Reentrancy: `nonReentrant` plus the `delete` at step 6 (before any `mintCard`)
+mean the buyer's `onERC721Received` callback sees no pending commit and cannot
+re-enter to double-reveal.
+
+Gas: ~1.17 M for `revealPack` (5 mints); `commitPack` is one SSTORE + a deposit.
 
 ### `setPackPrice(uint256 newPrice)` — `onlyOwner`
 
@@ -95,16 +124,18 @@ bps; this one allows up to 10 000. See [audit I-03](../audit.md).
 
 ## 4. Internal helpers worth understanding
 
-### `_random(uint256 salt) → uint256`
+### Seed derivation (in `revealPack`)
 
 ```solidity
-uint256(keccak256(abi.encode(block.prevrandao, msg.sender, _nonce++, salt)))
+uint256 seed = uint256(keccak256(abi.encode(blockhash(commitBlock), msg.sender)));
+// per card i: rand = uint256(keccak256(abi.encode(seed, i)))
 ```
 
-Cheap pseudo-RNG. The `_nonce++` ensures uniqueness across multiple calls
-within a single block from the same sender. **See [audit M-04](../audit.md)
-for the validator-bias attack** — the function body is isolated and is the
-single point of swap for a Chainlink VRF integration.
+`blockhash(commitBlock)` is the entropy; the window checks in `revealPack`
+guarantee it is a non-zero, settled hash. The seed is isolated to this one
+expression — the single point of swap for a Chainlink VRF integration that
+would also close the residual validator-bias vector. **See
+[audit M-04](../audit.md).**
 
 ### `_rollRarity(uint256 rand) → Rarity`
 
@@ -155,7 +186,8 @@ splitter's `ValueMismatch` check will never trigger from this caller.
 
 | Event | Indexed | Notes |
 |---|---|---|
-| `PackOpened(buyer, tokenIds[5], cardIds[5], rarities[5])` | `buyer` | Frontend reads this to drive the card-reveal animation |
+| `PackCommitted(buyer, commitBlock)` | `buyer` | Emitted by `commitPack`; tells the buyer which block to reveal against |
+| `PackOpened(buyer, tokenIds[5], cardIds[5], rarities[5])` | `buyer` | Emitted by `revealPack`; frontend/indexer read this to record the mint and drive the card-reveal animation |
 | `PackPriceSet(newPrice)` | — | Admin action |
 | `RevenueConfigSet(treasury, issuer, feeBps)` | — | Admin action |
 
@@ -165,9 +197,13 @@ splitter's `ValueMismatch` check will never trigger from this caller.
 
 | Error | Trigger |
 |---|---|
-| `WrongPayment(uint256 sent, uint256 required)` | `msg.value != packPrice` |
+| `WrongPayment(uint256 sent, uint256 required)` | `commitPack` with `msg.value != packPrice` |
 | `InvalidFeeBps(uint256 bps)` | `setRevenueConfig` / constructor with bps > 10_000 |
-| `AllCardsSoldOut()` | Every rarity tier in the NFT pool is empty |
+| `AllCardsSoldOut()` | `revealPack`: every rarity tier in the NFT pool is empty |
+| `PendingCommitExists()` | `commitPack` while an unrevealed, unexpired commit exists |
+| `NoPendingCommit()` | `revealPack` with no commit recorded for the caller |
+| `RevealTooEarly()` | `revealPack` in the same block as the commit |
+| `CommitExpired()` | `revealPack` more than `REVEAL_WINDOW` blocks after the commit |
 
 ---
 
@@ -175,20 +211,25 @@ splitter's `ValueMismatch` check will never trigger from this caller.
 
 | Invariant | Enforced by |
 |---|---|
-| `address(gacha).balance == 0` after every successful `openPack` | `splitter.deposit{value: msg.value}` forwards the full balance |
+| `address(gacha).balance == 0` after every `commitPack` | `splitter.deposit{value: msg.value}` forwards the full balance at commit; the contract never custodies ETH |
 | Sum credited to splitter == `msg.value` == `packPrice` | `_routeRevenue` arithmetic + splitter's own value-mismatch revert |
+| At most one unrevealed in-window commit per address | `PendingCommitExists` guard in `commitPack` |
+| Pack outcome unknowable at payment time | seed = `blockhash(commitBlock)`, unset until the block after commit; `RevealTooEarly` blocks same-block reveal |
 | Every minted token belongs to a real pool template (post-H-01) | Goes through `nft.mintCard(to, cardId)`, which checks `maxSupply > 0` |
 | `currentSupply` of every cardId increases monotonically | `mintCard` is the only writer |
 
 **Trusts:**
 - `owner` not to set hostile `platformFeeBps` or redirect treasury.
-- Block proposer not to bias `block.prevrandao` beyond the documented
-  tolerance (see audit M-04).
+- The proposer of the reveal block not to bias/withhold `blockhash(commitBlock)`
+  (residual validator-only vector; see audit M-04).
 - `PokemonCardNFT.MINTER_ROLE` is held only by this contract (deploy-script
   responsibility).
 
 **Does not trust:** the buyer's `onERC721Received` callback — `nonReentrant`
-blocks reentrant `openPack`, and no other state is exposed.
+plus deleting the commit before minting block any reentrant double-reveal, and
+no other state is exposed. Nor does it trust a contract caller to refrain from
+the simulate-and-revert attack — commit-reveal makes it impossible rather than
+relying on an EOA check.
 
 ---
 
@@ -196,7 +237,8 @@ blocks reentrant `openPack`, and no other state is exposed.
 
 | Operation                   | Gas      | Notes |
 |-----------------------------|----------|-------|
-| `openPack()` (5 mints)      | ~1.17 M  | Dominated by 5 × `mintCard` |
+| `commitPack()`              | ~80 k    | One SSTORE + splitter deposit |
+| `revealPack()` (5 mints)    | ~1.17 M  | Dominated by 5 × `mintCard` |
 | Per-card overhead           | ~234 k   | Includes `getAvailableCardIds` + mint |
 | `setPackPrice`              | ~30 k    | Single SSTORE |
 | `setRevenueConfig`          | ~50 k    | Three SSTOREs |
@@ -205,8 +247,12 @@ blocks reentrant `openPack`, and no other state is exposed.
 
 ## 9. Known limitations
 
-- **M-04**: `block.prevrandao` is validator-biaseable. VRF upgrade path is
-  documented at the `_random` definition.
+- **M-04** (fixed): the same-tx randomness that let any caller cherry-pick the
+  draw is replaced by commit-reveal. A residual validator-bias vector on
+  `blockhash(commitBlock)` remains; the VRF upgrade path closes it.
+- **Reveal forfeit**: a commit not revealed within `REVEAL_WINDOW` (256 blocks)
+  expires; the price was collected at commit, so the cards are forfeited. The
+  frontend reveals immediately, so this only bites abandoned sessions.
 - **I-02**: `_drawFromInventory` calls a view 1–5 times per pack, each of
   which scans the rarity array twice. Acceptable at n ≤ 40 cards/tier.
 - **I-03**: `platformFeeBps` cap is 10 000, not 1 000 like the Marketplace.

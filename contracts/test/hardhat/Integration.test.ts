@@ -96,7 +96,8 @@ describe("Integration — Full End-to-End Journey", function () {
 
   // ─── STEP 1: WalletA opens a pack ─────────────────────────────────────────
   it("STEP 1 — WalletA opens a pack: 5 cards minted, revenue routed to splitter", async function () {
-    await gacha.connect(walletA).openPack({ value: PACK_PRICE });
+    await gacha.connect(walletA).commitPack({ value: PACK_PRICE });
+    await gacha.connect(walletA).revealPack();
 
     // 5 NFTs owned by WalletA
     expect(await nft.balanceOf(walletA.address)).to.equal(5);

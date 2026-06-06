@@ -43,7 +43,12 @@ export const NFT_ABI = [
 
 export const GACHA_ABI = [
   "function packPrice() view returns (uint256)",
-  "function openPack() payable",
+  // Two-step commit–reveal: pay in commitPack(), draw in revealPack() a block later.
+  "function commitPack() payable",
+  "function revealPack()",
+  "function commitBlockOf(address) view returns (uint256)",
+  "function REVEAL_WINDOW() view returns (uint256)",
+  "event PackCommitted(address indexed buyer, uint256 commitBlock)",
   "event PackOpened(address indexed buyer, uint256[5] tokenIds, uint16[5] cardIds, uint8[5] rarities)",
 ] as const;
 

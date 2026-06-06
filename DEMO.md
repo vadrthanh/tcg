@@ -73,7 +73,7 @@ Navigate to one of the verified contract addresses on Etherscan Sepolia:
 ## Talking Points (for each step)
 
 **Pack opening:**
-> "Each pack costs 0.01 ETH. The gacha engine uses keccak256 of block.prevrandao, sender address, and a monotonic nonce to roll rarity — 60% Common through 1% Legendary. It draws from a live on-chain pool of 40 Gen-I cards with strict supply limits: Mewtwo has only 5 copies ever."
+> "Each pack costs 0.01 ETH and opens in two transactions — a commit-reveal scheme. You pay in `commitPack`; a block later `revealPack` rolls the rarity from the hash of your commit block, which didn't exist when you paid — so nobody can simulate the draw and only buy on a Legendary. Weights run 60% Common through 1% Legendary, drawn from a live on-chain pool of 40 Gen-I cards with strict supply limits: Mewtwo has only 5 copies ever."
 
 **Listing:**
 > "The seller approves the Marketplace contract as an operator, then lists at any price. The marketplace reads the card's template floor price to suggest a starting point."
