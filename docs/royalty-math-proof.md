@@ -1,7 +1,7 @@
 # Royalty Math Proof — PokemonCardNFT / PaymentSplitter
 
-> **Person 1 deliverable — Phase E, Day 12**
-> This section is submitted to Person 5 for inclusion in the consolidated technical report.
+> Contributed as the "Person 1" capstone deliverable (Phase E). Verified
+> against the production contracts in `contracts/src/`.
 
 ---
 
@@ -30,22 +30,27 @@ structs, each carrying an independent `feeBps` (basis points out of 10 000):
 ```solidity
 struct RoyaltyReceiver {
     address receiver;
-    uint16  feeBps;   // e.g. 500 = 5 %
+    uint96  feeBps;   // e.g. 500 = 5 %
 }
 
 mapping(uint256 => RoyaltyReceiver[]) private _royaltyReceivers;
 ```
 
-Receivers are fixed at mint time and are immutable afterwards.
+`feeBps` is typed `uint96` so the struct packs into two storage slots with the
+20-byte `address` (see audit finding I-06; the value range only needs
+`uint16`). Receivers are fixed at mint time and are immutable afterwards.
 
 ### 2.2 Cap enforcement
 
 ```solidity
-uint16 public constant MAX_ROYALTY_BPS = 1000; // 10 %
+uint96 public constant MAX_ROYALTY_BPS = 1000; // 10 %
 ```
 
-`mintCard()` sums all `feeBps` values and reverts `RoyaltyTooHigh` if the
-total exceeds `MAX_ROYALTY_BPS`. This guarantees:
+The cap is enforced wherever royalty receivers are set: the pool-seeding paths
+`addCardToPool` / `batchAddCards` (via `_validateAndStoreCard`) and the
+freeform `mintCard(to, data, receivers)` overload. Each sums all `feeBps`
+values and reverts `RoyaltyCapExceeded(total, MAX_ROYALTY_BPS)` if the total
+exceeds the cap. This guarantees for every token:
 
 ```
 Σ feeBps_i  ≤  1000  (i.e. ≤ 10 %)
@@ -163,27 +168,29 @@ into `sellerProceeds`.
 
 ## 6. Foundry Proof (1 000 fuzz runs)
 
-Person 3's `PaymentSplitter.fuzz.t.sol` proves the invariant empirically
-across the full uint256 sale-price space:
+The invariant is proven empirically by `testFuzz_valueConservation` in
+`contracts/test/foundry/Marketplace.t.sol`, which distributes proceeds through
+a real `Marketplace.buyCard` across a fuzzed sale-price space:
 
 ```solidity
-// Pseudocode of the fuzz test
+// test/foundry/Marketplace.t.sol
 function testFuzz_valueConservation(uint256 salePrice) public {
     vm.assume(salePrice >= 0.001 ether && salePrice <= 100 ether);
 
-    // ... distribute proceeds via Marketplace ...
+    // ... list + buy via Marketplace, crediting the PaymentSplitter ...
 
     assertEq(
-        platformFee + sum(royaltyAmts) + sellerProceeds,
+        platformFee + sumRoyalties + sellerProceeds,
         salePrice,
         "value conservation violated"
     );
 }
 ```
 
-After 1 000 Foundry runs with `--fuzz-seed 12345`, zero violations were
-found. The gas-reporter output for `buyCard` is included in the gas table
-(Person 5 section 6.2).
+After 1 000 Foundry runs, zero violations were found. Splitter solvency
+(`address(splitter).balance == Σ balances[*]`) is independently checked by the
+`invariant_balanceSumEqualsContractBalance` invariant in
+`PaymentSplitter.t.sol` (256 × 15 = 3 840 random handler calls, no violations).
 
 ---
 
@@ -193,7 +200,7 @@ found. The gas-reporter output for `buyCard` is included in the gas table
 |---|---|
 | No wei created | `sellerProceeds = salePrice - fees` is purely subtractive |
 | No wei destroyed | All deducted amounts deposited to `PaymentSplitter` atomically |
-| Royalty cap | `Σ feeBps ≤ 1000` enforced at mint; total deductions ≤ 12.5 % (10 % royalties + 2.5 % platform) |
+| Royalty cap | `Σ feeBps ≤ 1000` enforced when receivers are set; total deductions ≤ 12.5 % (10 % royalties + 2.5 % platform) |
 | Pull-payment isolation | Each recipient calls `claim()` independently; one failed claim cannot block others |
 | Reentrancy safety | `PaymentSplitter` zeroes balance before `.call{value}`; guarded by `ReentrancyGuard` |
 
