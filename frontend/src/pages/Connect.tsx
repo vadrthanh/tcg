@@ -11,13 +11,25 @@ export function Connect({ wallet }: Props) {
         Open card packs, trade NFTs, and earn royalties — all on Ethereum Sepolia.
       </p>
 
+      {!window.isSecureContext && (
+        <p className="text-yellow-400 text-sm max-w-md">
+          ⚠ This page isn't served over HTTPS — MetaMask only connects on a secure
+          (https://) origin. Open the site via its https address.
+        </p>
+      )}
+
       {!wallet.address ? (
-        <button
-          onClick={wallet.connect}
-          className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition"
-        >
-          Connect MetaMask
-        </button>
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={wallet.connect}
+            className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition"
+          >
+            Connect MetaMask
+          </button>
+          {wallet.error && (
+            <p className="text-red-400 text-sm max-w-md">{wallet.error}</p>
+          )}
+        </div>
       ) : !wallet.chainOk ? (
         <div className="flex flex-col items-center gap-3">
           <p className="text-yellow-400">⚠ Wrong network — please switch to Sepolia</p>
