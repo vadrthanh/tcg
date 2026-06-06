@@ -22,6 +22,19 @@ describe("GachaPack", function () {
   const PACK_PRICE     = ethers.parseEther("0.01");
   const PLATFORM_FEE_BPS = 8000n;
 
+  // ─── commit → reveal helper ────────────────────────────────────────────────
+  // A pack is now opened in two transactions. With Hardhat automine on, the
+  // commit and reveal land in consecutive blocks, so reveal sees a settled
+  // blockhash(commitBlock). Returns the reveal tx (carries PackOpened).
+
+  async function open(g: GachaPack, signer: HardhatEthersSigner) {
+    await g.connect(signer).commitPack({ value: PACK_PRICE });
+    return g.connect(signer).revealPack();
+  }
+  async function openPack(signer: HardhatEthersSigner = buyer) {
+    return open(gacha, signer);
+  }
+
   // ─── Pool seeding helper ──────────────────────────────────────────────────
 
   function makeTemplate(
@@ -96,20 +109,90 @@ describe("GachaPack", function () {
   describe("payment validation", function () {
     it("reverts when payment is too low", async function () {
       await expect(
-        gacha.connect(buyer).openPack({ value: ethers.parseEther("0.005") })
+        gacha.connect(buyer).commitPack({ value: ethers.parseEther("0.005") })
       ).to.be.revertedWithCustomError(gacha, "WrongPayment");
     });
 
     it("reverts when payment is too high", async function () {
       await expect(
-        gacha.connect(buyer).openPack({ value: ethers.parseEther("0.02") })
+        gacha.connect(buyer).commitPack({ value: ethers.parseEther("0.02") })
       ).to.be.revertedWithCustomError(gacha, "WrongPayment");
     });
 
     it("reverts when no payment sent", async function () {
       await expect(
-        gacha.connect(buyer).openPack({ value: 0 })
+        gacha.connect(buyer).commitPack({ value: 0 })
       ).to.be.revertedWithCustomError(gacha, "WrongPayment");
+    });
+  });
+
+  // ─── Commit / reveal mechanics ──────────────────────────────────────────────
+
+  describe("commit-reveal mechanics", function () {
+    it("commitPack routes revenue immediately but mints nothing", async function () {
+      await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      expect(await nft.balanceOf(buyer.address)).to.equal(0);
+      // Pack price already in the splitter; gacha custodies no ETH.
+      expect(await ethers.provider.getBalance(splitter.target)).to.equal(PACK_PRICE);
+      expect(await ethers.provider.getBalance(gacha.target)).to.equal(0);
+    });
+
+    it("commitPack emits PackCommitted with the commit block", async function () {
+      const tx      = await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      const receipt = await tx.wait();
+      const ev      = receipt?.logs
+        .map((l) => { try { return gacha.interface.parseLog(l as any); } catch { return null; } })
+        .find((e) => e?.name === "PackCommitted");
+      expect(ev).to.not.be.null;
+      expect(ev!.args.buyer).to.equal(buyer.address);
+      expect(ev!.args.commitBlock).to.equal(BigInt(receipt!.blockNumber));
+    });
+
+    it("revealPack mints 5 cards for a prior commit", async function () {
+      await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      await gacha.connect(buyer).revealPack();
+      expect(await nft.balanceOf(buyer.address)).to.equal(5);
+    });
+
+    it("revealPack reverts NoPendingCommit without a commit", async function () {
+      await expect(
+        gacha.connect(buyer).revealPack()
+      ).to.be.revertedWithCustomError(gacha, "NoPendingCommit");
+    });
+
+    it("a second commit before reveal reverts PendingCommitExists", async function () {
+      await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      await expect(
+        gacha.connect(buyer).commitPack({ value: PACK_PRICE })
+      ).to.be.revertedWithCustomError(gacha, "PendingCommitExists");
+    });
+
+    it("revealPack reverts CommitExpired after the 256-block window", async function () {
+      await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      await ethers.provider.send("hardhat_mine", ["0x101"]); // 257 blocks
+      await expect(
+        gacha.connect(buyer).revealPack()
+      ).to.be.revertedWithCustomError(gacha, "CommitExpired");
+    });
+
+    it("allows a fresh commit once the previous one has expired", async function () {
+      await gacha.connect(buyer).commitPack({ value: PACK_PRICE });
+      await ethers.provider.send("hardhat_mine", ["0x101"]);
+      await expect(
+        gacha.connect(buyer).commitPack({ value: PACK_PRICE })
+      ).to.not.be.reverted;
+    });
+
+    it("defeats the same-transaction simulate-and-revert attack", async function () {
+      // A wrapper contract that pays and then tries to read the outcome in the
+      // same tx cannot — revealPack reverts RevealTooEarly, so it can never
+      // branch-and-revert on an unfavourable draw.
+      const Attacker  = await ethers.getContractFactory("GachaSameTxAttacker");
+      const attacker  = await Attacker.deploy(gacha.target);
+      await attacker.waitForDeployment();
+      await expect(
+        attacker.commitAndRevealSameTx({ value: PACK_PRICE })
+      ).to.be.revertedWithCustomError(gacha, "RevealTooEarly");
     });
   });
 
@@ -117,27 +200,27 @@ describe("GachaPack", function () {
 
   describe("openPack — card minting from pool", function () {
     it("mints exactly 5 cards to the buyer", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       expect(await nft.balanceOf(buyer.address)).to.equal(5);
     });
 
     it("mints cards with sequential tokenIds starting from 0", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       for (let i = 0; i < 5; i++) {
         expect(await nft.ownerOf(i)).to.equal(buyer.address);
       }
     });
 
     it("second pack gives tokenIds 5-9", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
+      await openPack();
       for (let i = 5; i < 10; i++) {
         expect(await nft.ownerOf(i)).to.equal(buyer.address);
       }
     });
 
     it("each card has a valid rarity (0-4)", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       for (let i = 0; i < 5; i++) {
         const card = await nft.getCard(i);
         expect(Number(card.rarity)).to.be.gte(0).and.lte(4);
@@ -145,7 +228,7 @@ describe("GachaPack", function () {
     });
 
     it("each card has a non-empty name and imageURI", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       for (let i = 0; i < 5; i++) {
         const card = await nft.getCard(i);
         expect(card.name.length).to.be.gt(0);
@@ -154,7 +237,7 @@ describe("GachaPack", function () {
     });
 
     it("each card has royalty receivers from the pool template", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       const rxs = await nft.getRoyaltyReceivers(0);
       expect(rxs.length).to.equal(2);
       expect(rxs[0].receiver).to.equal(platform.address); // platform
@@ -164,7 +247,7 @@ describe("GachaPack", function () {
     });
 
     it("emits PackOpened with tokenIds, cardIds, and rarities", async function () {
-      const tx      = await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      const tx      = await openPack();
       const receipt = await tx.wait();
       const event   = receipt?.logs
         .map((log) => { try { return gacha.interface.parseLog(log as any); } catch { return null; } })
@@ -178,7 +261,7 @@ describe("GachaPack", function () {
 
     it("pool currentSupply increments after opening a pack", async function () {
       // Open pack and note which cardIds were minted via the event
-      const tx      = await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      const tx      = await openPack();
       const receipt = await tx.wait();
       const event   = receipt?.logs
         .map((l) => { try { return gacha.interface.parseLog(l as any); } catch { return null; } })
@@ -197,31 +280,31 @@ describe("GachaPack", function () {
 
   describe("revenue routing", function () {
     it("entire pack price lands in the splitter", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       expect(await ethers.provider.getBalance(splitter.target)).to.equal(PACK_PRICE);
     });
 
     it("platform receives 80% of pack price", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       const expected = (PACK_PRICE * PLATFORM_FEE_BPS) / 10_000n;
       expect(await splitter.claimable(platform.address)).to.equal(expected);
     });
 
     it("issuer receives remaining 20%", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       const platformAmt = (PACK_PRICE * PLATFORM_FEE_BPS) / 10_000n;
       expect(await splitter.claimable(issuer.address)).to.equal(PACK_PRICE - platformAmt);
     });
 
     it("platform + issuer sum to exact pack price", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       const p = await splitter.claimable(platform.address);
       const i = await splitter.claimable(issuer.address);
       expect(p + i).to.equal(PACK_PRICE);
     });
 
     it("gacha holds zero ETH after opening", async function () {
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
       expect(await ethers.provider.getBalance(gacha.target)).to.equal(0);
     });
   });
@@ -236,9 +319,9 @@ describe("GachaPack", function () {
 
     it("opening multiple packs depletes pool supply", async function () {
       // Open 3 packs (15 cards) and verify total minted = 15
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
-      await gacha.connect(buyer).openPack({ value: PACK_PRICE });
+      await openPack();
+      await openPack();
+      await openPack();
       expect(await nft.balanceOf(buyer.address)).to.equal(15);
     });
   });
@@ -257,9 +340,10 @@ describe("GachaPack", function () {
 
     it("reverts AllCardsSoldOut when pool has no cards at all", async function () {
       const { gacha2 } = await freshGacha();
-      // No cards added to the pool → immediate revert on any roll
+      // No cards added to the pool → commit succeeds, reveal reverts on the draw.
+      await gacha2.connect(buyer).commitPack({ value: PACK_PRICE });
       await expect(
-        gacha2.connect(buyer).openPack({ value: PACK_PRICE })
+        gacha2.connect(buyer).revealPack()
       ).to.be.revertedWithCustomError(gacha2, "AllCardsSoldOut");
     });
 
@@ -273,10 +357,11 @@ describe("GachaPack", function () {
         issuer.address,   200
       );
       // First pack succeeds (5 draws all served by the single Common card)
-      await gacha2.connect(buyer).openPack({ value: PACK_PRICE });
-      // Pool now exhausted — second pack must revert
+      await open(gacha2, buyer);
+      // Pool now exhausted — second pack's reveal must revert
+      await gacha2.connect(buyer).commitPack({ value: PACK_PRICE });
       await expect(
-        gacha2.connect(buyer).openPack({ value: PACK_PRICE })
+        gacha2.connect(buyer).revealPack()
       ).to.be.revertedWithCustomError(gacha2, "AllCardsSoldOut");
     });
   });
@@ -320,13 +405,10 @@ describe("GachaPack", function () {
       // Legendary is now sold out
       expect((await nft3.getAvailableCardIds(4)).length).to.equal(0);
 
-      // But openPack should still work — any Legendary roll falls down to UltraRare
-      // (50+ packs should cover at least one Legendary roll statistically)
-      // Just verify the pack opens without reverting
+      // But opening should still work — any Legendary roll falls down to UltraRare.
+      // Just verify packs open without reverting.
       for (let i = 0; i < 3; i++) {
-        await expect(
-          gacha3.connect(buyer).openPack({ value: PACK_PRICE })
-        ).to.not.be.reverted;
+        await expect(open(gacha3, buyer)).to.not.be.reverted;
       }
     });
   });

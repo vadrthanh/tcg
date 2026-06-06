@@ -12,12 +12,14 @@ steps:
 2. **Draw a specific card** from the rolled tier's remaining inventory; if the
    tier is empty, fall down to the next-lower tier.
 
-The randomness source is a deterministic `keccak256` over `block.prevrandao`,
-the buyer's address, a contract-wide nonce, and a per-card salt. It is
-*pseudo-random*: a validator who controls `block.prevrandao` can bias outcomes
-within a single block. The contract is structured so that this whole function
-can be replaced with a Chainlink VRF callback without changing any other code
-(see [VRF Upgrade Path](#vrf-upgrade-path) below).
+A pack opens in **two transactions** (commit-reveal). The buyer pays in
+`commitPack()`, which records the commit block; the 5-card draw happens later in
+`revealPack()`, seeded by `blockhash(commitBlock)` — a value that does not exist
+when the buyer pays. This is what makes the draw fair: the outcome cannot be
+simulated, so a contract caller can no longer pay-and-revert until a Legendary
+appears (see [Why commit-reveal](#why-commit-reveal) below). The remaining
+seed weakness — a block proposer biasing the reveal block's hash — is removable
+with a Chainlink VRF swap (see [VRF Upgrade Path](#vrf-upgrade-path)).
 
 ## Rarity weights
 
@@ -49,25 +51,49 @@ Branchless O(1) lookup — no loops, no array reads.
 ## Randomness source
 
 ```solidity
-function _random(uint256 salt) internal returns (uint256) {
-    return uint256(
-        keccak256(abi.encode(block.prevrandao, msg.sender, _nonce++, salt))
-    );
+// commitPack(): pay, route revenue, remember the block. No draw here.
+function commitPack() external payable nonReentrant {
+    if (msg.value != packPrice) revert WrongPayment(msg.value, packPrice);
+    // ... reject an existing in-window commit ...
+    commitBlockOf[msg.sender] = block.number;
+    _routeRevenue();
+    emit PackCommitted(msg.sender, block.number);
+}
+
+// revealPack(): a later block — seed from the now-settled commit block hash.
+function revealPack() external nonReentrant {
+    uint256 commitBlock = commitBlockOf[msg.sender];
+    if (commitBlock == 0)                           revert NoPendingCommit();
+    if (block.number <= commitBlock)                revert RevealTooEarly();
+    if (block.number > commitBlock + REVEAL_WINDOW) revert CommitExpired();
+
+    uint256 seed = uint256(keccak256(abi.encode(blockhash(commitBlock), msg.sender)));
+    delete commitBlockOf[msg.sender];               // CEI before minting
+    // for each of 5 cards: rand = keccak256(seed, i) → _rollRarity → _drawFromInventory → mint
 }
 ```
 
-| Input            | Why it's there                                                                |
-|------------------|-------------------------------------------------------------------------------|
-| `block.prevrandao` | Post-merge EVM randomness opcode. Stronger than `block.timestamp` (which is miner-tunable). |
-| `msg.sender`     | Prevents one pack opener from predicting another's outcome by reading state.  |
-| `_nonce++`       | Distinguishes two packs opened in the same block by the same caller.          |
-| `salt`           | The per-card index inside a pack — 5 unique seeds from one `_nonce` value.    |
+| Input                  | Why it's there                                                                          |
+|------------------------|-----------------------------------------------------------------------------------------|
+| `blockhash(commitBlock)` | The seed. Did not exist when the buyer paid, so the outcome is unknowable at commit time. |
+| `msg.sender`           | Binds the seed to the buyer so two buyers committing in the same block draw differently. |
+| `keccak256(seed, i)`   | Per-card sub-seed — 5 independent draws from one commit seed.                            |
 
-**Known weakness:** `block.prevrandao` is set by the proposer of the prior
-beacon block. A proposer who is also the gacha buyer can re-roll up to once per
-block-proposal opportunity by withholding their block. This is a published
-limitation of `prevrandao`. For a capstone demo on Sepolia this is acceptable;
-the [VRF upgrade path](#vrf-upgrade-path) is a one-function swap.
+### Why commit-reveal
+
+The earlier design drew and minted all 5 cards in the **same transaction** as
+the payment. A wrapper contract could call it and, from the `onERC721Received`
+callback fired during minting, `revert` unless a high tier was drawn — paying
+only on favourable rolls and draining the scarce tiers for free. Splitting pay
+(`commitPack`) from draw (`revealPack`, a block later) removes the ability to
+see the outcome while the payment is still revertible. Revenue is routed at
+commit, so declining a bad pack by never revealing just forfeits the cards.
+
+**Residual weakness:** the proposer of the reveal block can still bias or
+withhold `blockhash(commitBlock)` — a validator-only vector, far weaker than the
+free re-roll above. A commit must be revealed within `REVEAL_WINDOW` (256
+blocks, the EVM blockhash horizon) or it expires. For a Sepolia capstone demo
+this is acceptable; the [VRF upgrade path](#vrf-upgrade-path) removes it.
 
 ## Inventory draw + falldown
 
@@ -111,13 +137,16 @@ invariant: *every card minted came from a tier ≤ the tier rolled*.
 
 **Edge case — pool completely empty:** the for-loop bottoms out at Common; if
 even Common is exhausted, the function reverts `AllCardsSoldOut()` and the
-whole `openPack()` transaction rolls back (no partial pack, no ETH lost).
+whole `revealPack()` transaction rolls back (no partial pack). Note the pack
+price was already collected at `commitPack`, so a commit made against a pool
+that then fully depletes forfeits its price — an accepted edge for a fixed pool.
 
 ## Statistical validation
 
-Foundry test `test_rarityDistribution` opens 200 packs (1 000 cards) with a
-seeded `block.prevrandao` per pack and counts each rarity. The pool is
-generously sized so falldown does not kick in.
+Foundry test `test_rarityDistribution` opens 200 packs (1 000 cards), setting a
+distinct `blockhash(commitBlock)` per pack (via `vm.setBlockhash`) so each draw
+has an independent seed, and counts each rarity. The pool is generously sized so
+falldown does not kick in.
 
 ### Configured vs observed (1 000 cards)
 
@@ -147,9 +176,12 @@ times with random inputs; all runs pass.
 
 ## VRF upgrade path
 
-The randomness source is fully isolated to `_random()`. To swap in Chainlink
-VRF v2, only `_random` changes; `_rollRarity` and `_drawFromInventory` are
-unchanged because they accept any `uint256` seed.
+Commit-reveal already removes the dominant attack but leaves a validator-bias
+residual on `blockhash(commitBlock)`. Chainlink VRF removes that residual too.
+The seed is the only thing that changes — `_rollRarity` and `_drawFromInventory`
+accept any `uint256`. The two-step shape maps cleanly onto VRF's
+request/fulfill: `commitPack` becomes the VRF request, `revealPack` becomes the
+`fulfillRandomWords` callback.
 
 Migration outline:
 
@@ -161,29 +193,27 @@ contract GachaPack is Ownable, ReentrancyGuard, VRFConsumerBaseV2 {
     uint64  immutable subId;
     bytes32 immutable keyHash;
 
-    struct PendingPack { address buyer; uint256 paid; }
-    mapping(uint256 => PendingPack) pending;  // VRF requestId → buyer
+    mapping(uint256 => address) pending;  // VRF requestId → buyer
 
-    function openPack() external payable {
+    function commitPack() external payable {
         if (msg.value != packPrice) revert WrongPayment(msg.value, packPrice);
-        uint256 reqId = VRF.requestRandomWords(keyHash, subId, 3, 200_000, 5);
-        pending[reqId] = PendingPack(msg.sender, msg.value);
+        _routeRevenue();                  // collect at request time, as today
+        uint256 reqId = VRF.requestRandomWords(keyHash, subId, 3, 400_000, 1);
+        pending[reqId] = msg.sender;
     }
 
     function fulfillRandomWords(uint256 reqId, uint256[] memory rand) internal override {
-        PendingPack memory p = pending[reqId];
+        address buyer = pending[reqId];
         delete pending[reqId];
-        // Reuse _rollRarity and _drawFromInventory exactly as-is, passing rand[i] as the seed.
-        ...
-        _routeRevenue(p.paid);
-        emit PackOpened(...);
+        // Reuse _rollRarity and _drawFromInventory as-is, seeding from rand[0].
+        // emit PackOpened(buyer, ...)
     }
 }
 ```
 
-The visible UX change: pack opening becomes a two-step flow (request → fulfill,
-~1 minute on Sepolia) instead of one synchronous transaction. The frontend
-already listens for `PackOpened` to drive the card-reveal animation, so the
+UX is already a two-step flow today (commit → reveal). With VRF the second step
+is the oracle callback (~1 minute on Sepolia) rather than a user-sent reveal.
+The frontend listens for `PackOpened` to drive the card-reveal animation, so the
 event-listening path is unchanged.
 
 ## Files

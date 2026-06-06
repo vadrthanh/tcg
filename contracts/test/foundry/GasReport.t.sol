@@ -53,14 +53,34 @@ contract GasReportTest is Test {
         vm.deal(buyer,  100 ether);
     }
 
-    function test_gas_openPack() public {
+    // commit → reveal helper for benchmarks that just need cards minted to `who`.
+    function _openPack(address who) internal {
+        vm.prank(who);
+        gacha.commitPack{value: 0.01 ether}();
+        uint256 cb = block.number;
+        vm.roll(cb + 1);
+        vm.setBlockhash(cb, keccak256(abi.encode("gas", who, cb)));
+        vm.prank(who);
+        gacha.revealPack();
+    }
+
+    function test_gas_commitPack() public {
         vm.prank(seller);
-        gacha.openPack{value: 0.01 ether}();
+        gacha.commitPack{value: 0.01 ether}();
+    }
+
+    function test_gas_revealPack() public {
+        vm.prank(seller);
+        gacha.commitPack{value: 0.01 ether}();
+        uint256 cb = block.number;
+        vm.roll(cb + 1);
+        vm.setBlockhash(cb, keccak256(abi.encode("gas", seller, cb)));
+        vm.prank(seller);
+        gacha.revealPack();
     }
 
     function test_gas_listCard() public {
-        vm.prank(seller);
-        gacha.openPack{value: 0.01 ether}();
+        _openPack(seller);
         vm.prank(seller);
         nft.approve(address(market), 0);
         vm.prank(seller);
@@ -68,8 +88,7 @@ contract GasReportTest is Test {
     }
 
     function test_gas_buyCard() public {
-        vm.prank(seller);
-        gacha.openPack{value: 0.01 ether}();
+        _openPack(seller);
         vm.prank(seller);
         nft.approve(address(market), 0);
         vm.prank(seller);
@@ -79,8 +98,7 @@ contract GasReportTest is Test {
     }
 
     function test_gas_claim() public {
-        vm.prank(seller);
-        gacha.openPack{value: 0.01 ether}();
+        _openPack(seller);
         vm.prank(platform);
         splitter.claim();
     }
