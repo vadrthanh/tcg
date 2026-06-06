@@ -39,7 +39,7 @@ path and most negative-path cases. Two of the four contracts are essentially
 | L-04 | Low | Listings have no expiration | Open |
 | L-05 | Low | `cancelListing` only callable by `listing.seller`; current owner cannot evict a stale listing | Open |
 | L-06 | Low | `PaymentSplitter` has no admin sweep for ETH delivered via SELFDESTRUCT / coinbase | Open |
-| L-07 | Low | Deploy script writes `contracts/deploy/addresses.json`; CLAUDE.md and frontend expect `frontend/src/config/addresses.json` | Open |
+| L-07 | Low | Deploy script wrote `contracts/deploy/addresses.json` but never updated the `VITE_*` vars the frontend actually reads, so the UI stayed on zero addresses after deploy | Fixed |
 | I-01 | Info | Two parallel auth systems on `PokemonCardNFT` (Ownable + AccessControl) | Open |
 | I-02 | Info | `GachaPack._drawFromInventory` calls a view 1–5 times per pack that iterates the rarity array twice each call | Open |
 | I-03 | Info | `GachaPack.setRevenueConfig` accepts up to 10 000 bps, while `Marketplace.setPlatformConfig` caps at 1 000 — inconsistent | Open |
@@ -568,26 +568,30 @@ assumption.
 
 ---
 
-### L-07 — Deploy script writes `addresses.json` to the wrong path
+### L-07 — Deploy script never updated what the frontend reads
 
-| Severity / Status | Low / Open |
+| Severity / Status | Low / Fixed |
 |---|---|
-| Location          | `contracts/scripts/deploy.ts:117-121` |
+| Location          | `contracts/scripts/deploy.ts` |
 
-`CLAUDE.md` and `frontend/src/config/contracts.ts` both expect deployed
-addresses at `frontend/src/config/addresses.json` (or equivalent). The deploy
-script writes to `contracts/deploy/addresses.json`. After a Sepolia deploy
-the frontend still has all-zero addresses and will silently target the zero
-address (every call reverts).
+The deploy script writes `contracts/deploy/addresses.json`, which the **backend**
+read replica consumes (`backend/src/lib/addresses.ts`). The **frontend**, however,
+reads addresses from `VITE_*` env vars in `frontend/.env` (not from any JSON file —
+see `frontend/src/config/contracts.ts` and `CLAUDE.md`). Nothing wrote those vars,
+so after a Sepolia deploy the UI kept all-zero addresses and silently targeted the
+zero address (every call reverts).
 
-One-line fix:
+> Note: an earlier draft of this finding prescribed writing to
+> `frontend/src/config/addresses.json`. That path is dead — no code reads it, and
+> redirecting the deploy output there would break the backend, which depends on
+> `contracts/deploy/addresses.json`. The finding is corrected here.
 
-```ts
-const outPath = path.join(__dirname, "../../frontend/src/config/addresses.json");
-```
-
-(Optionally write to both paths for backup.) Not a contract bug, but a real
-deploy-time foot-gun and reproducibility hazard for graders.
+**Fix applied:** `deploy.ts` still writes `contracts/deploy/addresses.json` for the
+backend, and now also merge-upserts the four `VITE_*_ADDRESS` vars plus
+`VITE_CHAIN_ID` into `frontend/.env` (`upsertFrontendEnv`), preserving existing keys
+such as `VITE_API_BASE_URL`. A single `npm run deploy:sepolia` now wires both
+subsystems. Not a contract bug — a deploy-time foot-gun and reproducibility hazard,
+now closed.
 
 ---
 
