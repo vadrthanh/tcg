@@ -185,6 +185,7 @@ export function Gacha({ wallet }: Props) {
             <div className="pack-stage">
               <div className="pack3d pack-charging">
                 <div className="pack-rays" />
+                <div className="pack-core" />
                 <div className="pack-shine" />
                 <div className="pack-logo mono">POKÉDESK</div>
                 <div className="pack-bolt charging"><Icon name="bolt" size={26} /></div>
@@ -195,11 +196,14 @@ export function Gacha({ wallet }: Props) {
 
           {(phase === "revealing" || phase === "done") && (
             <div className="reveal-stage">
+              <div className="burst-flash" />
               <div className="reveal-row">
                 {pulls.map((p, i) => (
-                  <div key={i} className={`reveal-card${i < shown ? " flipped" : ""}`} style={vars({ "--rc": RARITY[p.rarity].color })}>
+                  <div key={i}
+                    className={`reveal-card${i < shown ? " flipped" : ""}${RARITY[p.rarity].rank >= 3 ? " reveal-hot" : ""}`}
+                    style={vars({ "--rc": RARITY[p.rarity].color }, { animationDelay: `${i * 80}ms` })}>
                     <div className="reveal-inner">
-                      <div className="reveal-back"><span className="mono">POKÉDESK</span></div>
+                      <div className="reveal-back"><span className="reveal-back-gem" /><span className="mono">POKÉDESK</span></div>
                       <div className="reveal-front">
                         <CardArt card={p.card} size="lg" />
                         <div className="reveal-meta">
@@ -208,6 +212,7 @@ export function Gacha({ wallet }: Props) {
                         </div>
                       </div>
                     </div>
+                    <div className="reveal-ring" />
                   </div>
                 ))}
               </div>
