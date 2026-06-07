@@ -1,73 +1,108 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { formatEther } from "ethers";
 import { Toaster } from "react-hot-toast";
 import { useWallet } from "./hooks/useWallet";
-import { Connect } from "./pages/Connect";
+import { Icon, type IconName } from "./components/ui/Icon";
+import { Btn } from "./components/ui/Btn";
+import { CardModal } from "./components/CardModal";
+import type { CardRow } from "./lib/types";
+import { Home } from "./pages/Home";
 import { Gacha } from "./pages/Gacha";
 import { Collection } from "./pages/Collection";
 import { Inventory } from "./pages/Inventory";
 import { MarketplacePage } from "./pages/MarketplacePage";
 import { RoyaltyDashboard } from "./pages/RoyaltyDashboard";
 
-type Page = "connect" | "gacha" | "collection" | "inventory" | "marketplace" | "royalty";
+export type Page = "home" | "gacha" | "collection" | "inventory" | "marketplace" | "royalty";
 
-const NAV: { id: Page; label: string }[] = [
-  { id: "connect",     label: "🔌 Connect" },
-  { id: "gacha",       label: "⚡ Gacha" },
-  { id: "collection",  label: "📚 Collection" },
-  { id: "inventory",   label: "🃏 Inventory" },
-  { id: "marketplace", label: "🏪 Marketplace" },
-  { id: "royalty",     label: "💰 Royalties" },
+const NAV: { id: Page; label: string; icon: IconName }[] = [
+  { id: "home",        label: "Home",       icon: "home" },
+  { id: "gacha",       label: "Packs",      icon: "bolt" },
+  { id: "collection",  label: "Collection", icon: "grid" },
+  { id: "inventory",   label: "Inventory",  icon: "cards" },
+  { id: "marketplace", label: "Market",     icon: "store" },
+  { id: "royalty",     label: "Royalties",  icon: "coin" },
 ];
 
 export default function App() {
   const wallet = useWallet();
-  const [page, setPage] = useState<Page>("connect");
+  const [page, setPage] = useState<Page>("home");
+  const [modal, setModal] = useState<{ card: CardRow; owned: boolean } | null>(null);
+  const [balance, setBalance] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!wallet.provider || !wallet.address) { setBalance(null); return; }
+    let live = true;
+    wallet.provider.getBalance(wallet.address)
+      .then(b => { if (live) setBalance(Number(formatEther(b)).toFixed(3)); })
+      .catch(() => { if (live) setBalance(null); });
+    return () => { live = false; };
+  }, [wallet.provider, wallet.address]);
+
+  function go(p: Page) { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function openModal(card: CardRow, owned = false) { setModal({ card, owned }); }
+  const short = wallet.address ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}` : "";
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans">
+    <div className="app">
       <Toaster position="top-right" />
 
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <span className="text-white font-bold text-lg">🎴 Pokémon TCG NFT</span>
-          {wallet.address && (
-            <span className="text-xs text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded-full">
-              {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
-              {wallet.chainOk
-                ? <span className="ml-2 text-green-400">Sepolia</span>
-                : <span className="ml-2 text-yellow-400">Wrong network</span>}
-            </span>
-          )}
-        </div>
+      <header className="topbar">
+        <div className="topbar-in">
+          <div className="brand" onClick={() => go("home")}>
+            <span className="brand-mark"><span className="brand-gem" /></span>
+            <span className="brand-name">Poké<span className="faint">desk</span></span>
+          </div>
 
-        {/* Nav */}
-        <nav className="max-w-5xl mx-auto px-4 pb-2 flex gap-1 overflow-x-auto">
-          {NAV.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setPage(id)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition ${
-                page === id
-                  ? "bg-indigo-600 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-800"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+          <nav className="nav">
+            {NAV.map(n => (
+              <button key={n.id} title={n.label} className={`navi${page === n.id ? " active" : ""}`} onClick={() => go(n.id)}>
+                <Icon name={n.icon} size={17} /><span>{n.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="topbar-r">
+            {!wallet.address ? (
+              <Btn kind="primary" icon="wallet" onClick={wallet.connect}>Connect</Btn>
+            ) : !wallet.chainOk ? (
+              <Btn kind="outline" size="sm" onClick={wallet.switchToSepolia}>Switch to Sepolia</Btn>
+            ) : (
+              <div className="wallet-pill">
+                {balance != null && <span className="wallet-bal mono">◇ {balance}</span>}
+                <span className="wallet-addr mono">{short}</span>
+              </div>
+            )}
+          </div>
+        </div>
       </header>
 
-      {/* Page content */}
-      <main className="max-w-5xl mx-auto">
-        {page === "connect"     && <Connect    wallet={wallet} />}
-        {page === "gacha"       && <Gacha      wallet={wallet} />}
-        {page === "collection"  && <Collection wallet={wallet} />}
-        {page === "inventory"   && <Inventory  wallet={wallet} />}
-        {page === "marketplace" && <MarketplacePage   wallet={wallet} />}
-        {page === "royalty"     && <RoyaltyDashboard  wallet={wallet} />}
+      <nav className="nav-mobile">
+        {NAV.map(n => (
+          <button key={n.id} className={`navm${page === n.id ? " active" : ""}`} onClick={() => go(n.id)}>
+            <Icon name={n.icon} size={19} /><span>{n.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <main className="content">
+        {page === "home"        && <Home wallet={wallet} go={go} />}
+        {page === "gacha"       && <Gacha wallet={wallet} />}
+        {page === "collection"  && <Collection wallet={wallet} onOpen={openModal} />}
+        {page === "inventory"   && <Inventory wallet={wallet} go={go} />}
+        {page === "marketplace" && <MarketplacePage wallet={wallet} />}
+        {page === "royalty"     && <RoyaltyDashboard wallet={wallet} />}
       </main>
+
+      {modal && (
+        <CardModal
+          card={modal.card}
+          owned={modal.owned}
+          onClose={() => setModal(null)}
+          onPrimary={() => { setModal(null); go("gacha"); }}
+          primaryLabel="Find in packs"
+        />
+      )}
     </div>
   );
 }

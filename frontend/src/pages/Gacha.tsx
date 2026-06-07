@@ -1,38 +1,45 @@
-import { useState } from "react";
-import { Contract, formatEther } from "ethers";
+import { useEffect, useState } from "react";
+import { Contract, formatEther, type Log, type LogDescription } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, GACHA_ABI, NFT_ABI } from "../config/contracts";
+import { RARITY, RARITY_BY_INDEX, RARITY_ORDER, DROP_WEIGHTS, vars } from "../lib/tokens";
 import { api, pollUntil } from "../lib/api";
-import { CardFlip } from "../components/CardFlip";
+import type { CardRow, Rarity } from "../lib/types";
+import { CardArt } from "../components/ui/CardArt";
+import { RarityBadge } from "../components/ui/RarityBadge";
+import { Btn } from "../components/ui/Btn";
+import { Icon } from "../components/ui/Icon";
+import { PageHead } from "../components/PageHead";
+import { NotConnected } from "../components/NotConnected";
 import { txPending, txUpdate, txSuccess, txError } from "../components/TxToast";
 
 interface Props { wallet: WalletState; }
-
-interface CardData {
-  tokenId: bigint;
-  name: string;
-  rarity: number;
-  pokemonType: string;
-  hp: number;
-  imageURI: string;
-}
+type Phase = "idle" | "charging" | "revealing" | "done";
+interface Pull { tokenId: number; rarity: Rarity; card: CardRow; }
 
 export function Gacha({ wallet }: Props) {
-  const [cards, setCards]       = useState<CardData[]>([]);
-  const [revealed, setRevealed] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [packPrice, setPackPrice] = useState<string>("0.01");
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [pulls, setPulls] = useState<Pull[]>([]);
+  const [shown, setShown] = useState(0);
+  const [packPrice, setPackPrice] = useState("0.01");
+  const connected = !!wallet.address && wallet.chainOk;
 
-  async function openPack() {
+  // Staged reveal: flip one card every 380ms, then settle into the summary.
+  // Cleanup clears timers so StrictMode's double-invoke can't stack them.
+  useEffect(() => {
+    if (phase !== "revealing") return;
+    const timers = pulls.map((_, i) => setTimeout(() => setShown(s => Math.max(s, i + 1)), 380 * (i + 1)));
+    const end = setTimeout(() => setPhase("done"), 380 * (pulls.length + 1));
+    return () => { timers.forEach(clearTimeout); clearTimeout(end); };
+  }, [phase, pulls]);
+
+  async function open() {
     if (!wallet.signer || !wallet.address) return;
     const gacha = new Contract(ADDRESSES.GachaPack, GACHA_ABI, wallet.signer);
     const nft   = new Contract(ADDRESSES.PokemonCardNFT, NFT_ABI, wallet.signer);
     const provider = wallet.signer.provider!;
 
-    setLoading(true);
-    setCards([]);
-    setRevealed(false);
-
+    setPulls([]); setShown(0); setPhase("charging");
     const toastId = txPending("Step 1/2 — confirm payment…");
     try {
       const price = await gacha.packPrice();
@@ -40,106 +47,156 @@ export function Gacha({ wallet }: Props) {
 
       // A pack opens in two transactions. Pay in commitPack(); the draw is
       // derived from the commit block's hash in revealPack() a block later, so
-      // the outcome is unknowable when you pay. If a previous, still-valid
-      // commit is already on-chain (e.g. an abandoned reveal), skip straight to
-      // revealing it instead of paying again.
+      // the outcome is unknowable when you pay. Reuse a still-valid commit if one
+      // is already on-chain (e.g. an abandoned reveal) instead of paying again.
       const existing = await gacha.commitBlockOf(wallet.address) as bigint;
       const window   = await gacha.REVEAL_WINDOW() as bigint;
       const current  = BigInt(await provider.getBlockNumber());
       const hasLiveCommit = existing !== 0n && current <= existing + window;
-
       if (!hasLiveCommit) {
         const commitTx = await gacha.commitPack({ value: price });
         await commitTx.wait();
       }
 
-      // Reveal lands in a later block than the commit, so block.number is
-      // already past the commit block and blockhash(commitBlock) is settled.
       txUpdate(toastId, "Step 2/2 — confirm reveal…");
       const tx = await gacha.revealPack();
       const receipt = await tx.wait();
 
-      // Parse PackOpened event
       const iface = gacha.interface;
       const log = receipt.logs
-        .map((l: any) => { try { return iface.parseLog(l); } catch { return null; } })
-        .find((e: any) => e?.name === "PackOpened");
+        .map((l: Log) => { try { return iface.parseLog(l); } catch { return null; } })
+        .find((e: LogDescription | null) => e?.name === "PackOpened");
 
-      if (log) {
-        const tokenIds: bigint[] = log.args.tokenIds;
-        const cardData = await Promise.all(
-          tokenIds.map(async (tid) => {
-            const c = await nft.getCard(tid);
-            return {
-              tokenId: tid,
-              name: c.name,
-              rarity: Number(c.rarity),
-              pokemonType: c.pokemonType,
-              hp: Number(c.hp),
-              imageURI: c.imageURI,
-            };
-          })
-        );
-        setCards(cardData);
-      }
+      if (!log) { txError(toastId, new Error("Pack opened but no event was found")); setPhase("idle"); return; }
 
+      const tokenIds: bigint[] = log.args.tokenIds;
+      const result: Pull[] = await Promise.all(tokenIds.map(async (tid) => {
+        const c = await nft.getCard(tid);
+        const rarity = RARITY_BY_INDEX[Number(c.rarity)];
+        const card: CardRow = {
+          id: 0, name: c.name, rarity, pokemonType: c.pokemonType, hp: Number(c.hp),
+          attack: "", maxSupply: 0, currentSupply: 0, floorPrice: "0", imageURI: c.imageURI, createdAt: "",
+        };
+        return { tokenId: Number(tid), rarity, card };
+      }));
+      setPulls(result);
       txSuccess(toastId, "Pack opened!");
-      // Delay reveal for dramatic effect
-      setTimeout(() => setRevealed(true), 600);
+      setTimeout(() => setPhase("revealing"), 300);
 
-      // Best-effort: wait for the indexer to see at least one of the new tokenIds
-      // so Inventory/Collection immediately reflect the new mint on next visit.
-      // Fire-and-forget — UI stays responsive even if the API is unreachable.
-      if (wallet.address && log) {
-        const newIds = new Set((log.args.tokenIds as bigint[]).map(t => Number(t)));
-        pollUntil(
-          () => api.nftsByOwner(wallet.address!),
-          rows => rows.some(r => newIds.has(r.tokenId)),
-          { attempts: 6, intervalMs: 2000 },
-        ).catch(() => {});
-      }
+      // Best-effort: let the indexer catch the new tokenIds so Inventory/Collection
+      // reflect them on next visit. Fire-and-forget.
+      const newIds = new Set(tokenIds.map(t => Number(t)));
+      pollUntil(
+        () => api.nftsByOwner(wallet.address!),
+        rows => rows.some(r => newIds.has(r.tokenId)),
+        { attempts: 6, intervalMs: 2000 },
+      ).catch(() => {});
     } catch (e) {
       txError(toastId, e);
-    } finally {
-      setLoading(false);
+      setPhase("idle");
     }
   }
 
+  function reset() { setPhase("idle"); setPulls([]); setShown(0); }
+  const best = pulls.reduce<Pull | null>((a, p) => (!a || RARITY[p.rarity].rank > RARITY[a.rarity].rank ? p : a), null);
+
   return (
-    <div className="max-w-2xl mx-auto py-8 px-4">
-      <h2 className="text-2xl font-bold text-white mb-2">Open a Pack</h2>
-      <p className="text-gray-400 mb-2">Pay {packPrice} ETH · receive 5 random Pokémon cards</p>
-      <p className="text-gray-500 text-sm mb-6">
-        Opening takes two transactions — a payment, then a reveal a block later.
-        This keeps the draw fair: the outcome isn’t known when you pay.
-      </p>
+    <div className="screen">
+      <PageHead title="Open a Booster"
+        sub={`Pay ${packPrice} ETH for 5 random Pokémon — a payment, then a reveal a block later, so the draw is provably fair.`} />
 
-      {!wallet.address ? (
-        <p className="text-yellow-400">Connect your wallet first.</p>
+      {!connected ? (
+        <NotConnected onConnect={wallet.connect} note="Connect your wallet to open a pack." />
       ) : (
-        <button
-          onClick={openPack}
-          disabled={loading}
-          className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold rounded-xl transition mb-8"
-        >
-          {loading ? "Opening…" : "⚡ Open Pack"}
-        </button>
+        <div className="panel gacha-panel">
+          {phase === "idle" && (
+            <div className="pack-stage">
+              <div className="pack-pedestal">
+                <div className="pack3d" onClick={open}>
+                  <div className="pack-shine" />
+                  <div className="pack-logo mono">POKÉDESK</div>
+                  <div className="pack-sub mono">GENESIS BOOSTER</div>
+                  <div className="pack-bolt"><Icon name="bolt" size={24} /></div>
+                </div>
+              </div>
+              <div className="pack-cta">
+                <Btn kind="primary" size="lg" icon="bolt" onClick={open}>Open Booster</Btn>
+                <span className="pack-price mono">{packPrice} ETH · 5 cards</span>
+              </div>
+              <p className="pack-note faint">
+                <Icon name="lock" size={13} /> Provably fair — you pay first, cards reveal a block later, so the draw can't be known at purchase.
+              </p>
+            </div>
+          )}
+
+          {phase === "charging" && (
+            <div className="pack-stage">
+              <div className="pack3d pack-charging">
+                <div className="pack-rays" />
+                <div className="pack-shine" />
+                <div className="pack-logo mono">POKÉDESK</div>
+                <div className="pack-bolt charging"><Icon name="bolt" size={26} /></div>
+              </div>
+              <div className="charge-text mono">REVEALING ON-CHAIN…</div>
+            </div>
+          )}
+
+          {(phase === "revealing" || phase === "done") && (
+            <div className="reveal-stage">
+              <div className="reveal-row">
+                {pulls.map((p, i) => (
+                  <div key={i} className={`reveal-card${i < shown ? " flipped" : ""}`} style={vars({ "--rc": RARITY[p.rarity].color })}>
+                    <div className="reveal-inner">
+                      <div className="reveal-back"><span className="mono">POKÉDESK</span></div>
+                      <div className="reveal-front">
+                        <CardArt card={p.card} size="lg" />
+                        <div className="reveal-meta">
+                          <div className="ccard-name" style={{ fontSize: 14 }}>{p.card.name}</div>
+                          <RarityBadge rarity={p.rarity} small />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {phase === "done" && best && (
+                <div className="reveal-actions" style={{ animation: "floatUp .5s both" }}>
+                  <div className="reveal-summary" style={vars({ "--rc": RARITY[best.rarity].color })}>
+                    <span className="rs-label mono">BEST PULL</span>
+                    <span className="rs-name">{best.card.name}</span>
+                    <RarityBadge rarity={best.rarity} />
+                  </div>
+                  <div className="row gap-12">
+                    <Btn kind="ghost" onClick={reset}>Open another</Btn>
+                    <Btn kind="primary" icon="check" onClick={reset}>Done</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
-      {cards.length > 0 && (
-        <>
-          <p className="text-gray-400 text-sm mb-4">
-            {revealed ? "Click each card to flip!" : "Preparing your cards…"}
-          </p>
-          <div className="flex flex-wrap gap-4 justify-center">
-            {cards.map((card, i) => (
-              <div key={i} style={{ animationDelay: `${i * 150}ms` }}>
-                <CardFlip card={card} revealed={revealed} />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      <div className="odds panel">
+        <div className="row" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+          <h3 style={{ fontSize: 15 }}>Drop rates</h3>
+          <span className="faint mono" style={{ fontSize: 11 }}>PER CARD</span>
+        </div>
+        <div className="odds-bar">
+          {RARITY_ORDER.map(rk => (
+            <span key={rk} className="odds-seg" title={`${RARITY[rk].label} ${DROP_WEIGHTS[rk]}%`}
+              style={{ width: DROP_WEIGHTS[rk] + "%", background: RARITY[rk].color, color: RARITY[rk].color }} />
+          ))}
+        </div>
+        <div className="odds-legend">
+          {RARITY_ORDER.map(rk => (
+            <div key={rk} className="odds-item" style={vars({ "--rc": RARITY[rk].color })}>
+              <span className="odds-pct mono">{DROP_WEIGHTS[rk]}%</span>
+              <span className="odds-name"><span className="rdot" />{RARITY[rk].label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
