@@ -34,6 +34,18 @@ export function Gacha({ wallet }: Props) {
     return () => { timers.forEach(clearTimeout); clearTimeout(end); };
   }, [phase, pulls]);
 
+  // Show the real on-chain pack price in the header from the start — otherwise
+  // the idle subtitle displays the "0.01" default until the first open() runs.
+  useEffect(() => {
+    if (!wallet.provider) return;
+    let alive = true;
+    new Contract(ADDRESSES.GachaPack, GACHA_ABI, wallet.provider)
+      .packPrice()
+      .then((p: bigint) => { if (alive) setPackPrice(formatEther(p)); })
+      .catch(() => { /* keep default until a pack is opened */ });
+    return () => { alive = false; };
+  }, [wallet.provider]);
+
   async function open() {
     if (!wallet.signer || !wallet.address) return;
     const gacha = new Contract(ADDRESSES.GachaPack, GACHA_ABI, wallet.signer);
@@ -103,10 +115,15 @@ export function Gacha({ wallet }: Props) {
   function reset() { setPhase("idle"); setPulls([]); setShown(0); }
   const best = pulls.reduce<Pull | null>((a, p) => (!a || RARITY[p.rarity].rank > RARITY[a.rarity].rank ? p : a), null);
 
+  // Header copy follows the flow so it stops prompting "Pay …" once a pack is paid for.
+  const headSub =
+    phase === "charging"                       ? "Opening your booster on-chain — confirm in your wallet, then wait for the mint."
+    : phase === "revealing" || phase === "done" ? "Your 5 Pokémon, minted straight to your wallet. Open another anytime."
+    :                                             `Pay ${packPrice} ETH for 5 random Pokémon — drawn and minted on-chain in a single transaction.`;
+
   return (
     <div className="screen">
-      <PageHead title="Open a Booster"
-        sub={`Pay ${packPrice} ETH for 5 random Pokémon — drawn and minted on-chain in a single transaction.`} />
+      <PageHead title="Open a Booster" sub={headSub} />
 
       {!connected ? (
         <NotConnected onConnect={wallet.connect} note="Connect your wallet to open a pack." />
