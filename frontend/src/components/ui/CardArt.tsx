@@ -11,12 +11,14 @@ export function CardArt({ card, size = "md", revealing }: { card: ArtCard; size?
       style={vars({ "--tc": typeColor(card.pokemonType), "--rc": RARITY[card.rarity].color })}>
       <div className="art-stripes" />
       <div className="art-glow" />
-      <img
-        src={card.imageURI || FALLBACK}
-        alt={card.name}
-        loading="lazy"
-        onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK; }}
-      />
+      {card.imageURI && (
+        <img
+          src={card.imageURI}
+          alt={card.name}
+          loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK; }}
+        />
+      )}
     </div>
   );
 }

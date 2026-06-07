@@ -22,18 +22,35 @@
   position: relative; overflow: hidden; border-radius: var(--r-lg);
   background: linear-gradient(135deg, var(--bg-2), var(--bg));
   border: 1px solid var(--line); padding: clamp(28px, 5vw, 52px);
-  display: grid; grid-template-columns: 1fr auto; gap: 36px; align-items: center;
 }
 .hero-glow { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(600px 300px at 80% 30%, var(--accent-soft), transparent 70%); }
-.hero-l { position: relative; z-index: 1; max-width: 560px; }
+.hero-l { position: relative; z-index: 1; max-width: 620px; }
 .hero-eyebrow { font-size: 11px; letter-spacing: 0.22em; color: var(--accent-text); }
 .hero-title { font-size: clamp(34px, 5.5vw, 58px); line-height: 1.02; margin: 16px 0 18px; letter-spacing: -0.03em; }
 .hero-desc { color: var(--text-dim); font-size: 16px; line-height: 1.55; max-width: 480px; }
 .hero-cta { margin-top: 26px; }
-.hero-r { position: relative; z-index: 1; }
-.pack-mini { width: 168px; height: 232px; }
-@media (max-width: 760px) { .hero { grid-template-columns: 1fr; } .hero-r { display: none; } }
+
+/* ---------- hero card carousel (auto-scroll, left → right) ---------- */
+.hero-carousel {
+  position: relative; width: 100%; overflow: hidden; padding: 6px 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.hero-carousel-track {
+  display: flex; width: max-content; align-items: stretch;
+  animation: heroScrollX 70s linear infinite; will-change: transform;
+}
+.hero-carousel:hover .hero-carousel-track { animation-play-state: paused; }
+.hero-carousel-card {
+  flex: none; width: clamp(150px, 14vw, 190px); margin-right: 16px;
+  padding: 0; border: none; background: none; cursor: pointer;
+}
+.hero-carousel-card .art { box-shadow: var(--shadow-card), 0 0 30px -18px var(--rc); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.hero-carousel-card:hover .art { transform: translateY(-6px) scale(1.03); }
+/* track is the list duplicated once; -50% scrolls exactly one set → seamless loop.
+   from -50% to 0 makes cards drift left → right. */
+@keyframes heroScrollX { from { transform: translateX(-50%); } to { transform: translateX(0); } }
 
 /* ---------- dashboard stats ---------- */
 .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
