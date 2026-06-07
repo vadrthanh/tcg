@@ -9,6 +9,7 @@ import type { ListingRow, Rarity } from "../lib/types";
 import { ADDRESSES, MARKET_ABI } from "../config/contracts";
 import { RARITY_BY_INDEX } from "../lib/tokens";
 import { api, ApiUnavailableError, pollUntil } from "../lib/api";
+import { assertChain } from "../lib/assertChain";
 import { PageHead } from "../components/PageHead";
 import { RarityFilter } from "../components/RarityFilter";
 import { CreatureCard } from "../components/CreatureCard";
@@ -52,6 +53,7 @@ export function MarketplacePage({ wallet }: Props) {
     const market = new Contract(ADDRESSES.Marketplace, MARKET_ABI, wallet.signer);
     const id = txPending("Buying card…");
     try {
+      await assertChain(wallet.provider);
       const tx = await market.buyCard(l.tokenId, { value: parseEther(l.price) });
       await tx.wait();
       txSuccess(id, "Purchased!");
@@ -65,6 +67,7 @@ export function MarketplacePage({ wallet }: Props) {
     const market = new Contract(ADDRESSES.Marketplace, MARKET_ABI, wallet.signer);
     const id = txPending("Cancelling listing…");
     try {
+      await assertChain(wallet.provider);
       const tx = await market.cancelListing(l.tokenId);
       await tx.wait();
       txSuccess(id, "Cancelled");

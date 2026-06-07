@@ -4,6 +4,7 @@ import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, GACHA_ABI, NFT_ABI } from "../config/contracts";
 import { RARITY, RARITY_BY_INDEX, RARITY_ORDER, DROP_WEIGHTS, vars } from "../lib/tokens";
 import { api, pollUntil } from "../lib/api";
+import { assertChain } from "../lib/assertChain";
 import type { CardRow, Rarity } from "../lib/types";
 import { CardArt } from "../components/ui/CardArt";
 import { RarityBadge } from "../components/ui/RarityBadge";
@@ -42,6 +43,7 @@ export function Gacha({ wallet }: Props) {
     setPulls([]); setShown(0); setPhase("charging");
     const toastId = txPending("Step 1/2 — confirm payment…");
     try {
+      await assertChain(wallet.provider);
       const price = await gacha.packPrice();
       setPackPrice(formatEther(price));
 
