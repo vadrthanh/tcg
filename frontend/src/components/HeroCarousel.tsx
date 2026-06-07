@@ -82,7 +82,7 @@ export function HeroCarousel({ cards, onClick }: { cards: CardRow[]; onClick?: (
   function cardClick() { if (!st.current.moved) onClick?.(); }
 
   return (
-    <div className="hero-carousel"
+    <div className="hero-carousel" aria-hidden="true"
       onPointerDown={onPointerDown} onPointerMove={onPointerMove}
       onPointerUp={endDrag} onPointerCancel={endDrag} onWheel={onWheel}>
       <div className="hero-carousel-track" ref={trackRef}>
