@@ -114,19 +114,12 @@ button { font-family: inherit; cursor: pointer; }
 @keyframes pulseGlow { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
 @keyframes spinSlow { to { transform: rotate(360deg); } }
 
-/* pack-opening: charge -> burst -> deal-in -> flip with rarity emphasis */
-@keyframes chargeUp {
-  0%   { transform: scale(1) rotate(0deg);      box-shadow: 0 40px 80px -40px var(--accent); filter: brightness(1); }
-  18%  { transform: scale(1.015) rotate(-1deg); }
-  34%  { transform: scale(1.03) rotate(1.4deg); }
-  50%  { transform: scale(1.04) rotate(-2deg);   box-shadow: 0 0 70px 4px var(--accent); }
-  66%  { transform: scale(1.05) rotate(2.2deg); }
-  80%  { transform: scale(1.06) rotate(-2.6deg); box-shadow: 0 0 110px 14px var(--accent); filter: brightness(1.25); }
-  90%  { transform: scale(1.05) rotate(0deg); }
-  100% { transform: scale(1.2) rotate(0deg);     box-shadow: 0 0 170px 44px var(--accent); filter: brightness(1.9); }
+/* pack-opening: the charging hold loops while the tx is pending; the climactic
+   burst + deal-in fire only on the reveal — i.e. once the transaction is done. */
+@keyframes chargeHold {
+  0%, 100% { transform: scale(1) rotate(0deg);    box-shadow: 0 30px 70px -40px var(--accent); filter: brightness(1); }
+  50%      { transform: scale(1.04) rotate(0deg); box-shadow: 0 0 64px 2px var(--accent);       filter: brightness(1.16); }
 }
-@keyframes coreGrow { 0% { opacity: 0; } 65% { opacity: 0.55; } 100% { opacity: 1; } }
-@keyframes boltPulse { 0%,100% { transform: scale(1); filter: drop-shadow(0 0 4px var(--accent)); } 50% { transform: scale(1.22); filter: drop-shadow(0 0 12px var(--accent)); } }
 @keyframes dealIn {
   0%   { opacity: 0; transform: translateY(56px) scale(.72) rotate(-7deg); }
   55%  { opacity: 1; }
