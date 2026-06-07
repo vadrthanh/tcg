@@ -107,7 +107,7 @@ function InventoryTile({ nft, isListed, wallet, onListed }: {
     setBusy(true);
     try {
       const isApprovedAll = await nftC.isApprovedForAll(wallet.signer.address, ADDRESSES.Marketplace);
-      if (!isApprovedAll) { const ap = await nftC.approve(ADDRESSES.Marketplace, nft.tokenId); await ap.wait(); }
+      if (!isApprovedAll) { const ap = await nftC.setApprovalForAll(ADDRESSES.Marketplace, true); await ap.wait(); }
       txSuccess(toastId, "Approved");
       toastId = txPending("Listing card…");
       const tx = await marketC.listCard(nft.tokenId, parseEther(price));

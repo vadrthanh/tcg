@@ -36,7 +36,6 @@ export const NFT_ABI = [
   "function tokenCardId(uint256) view returns (uint16)",
   "function getCardTemplate(uint16) view returns (tuple(uint16 cardId, string name, uint8 rarity, string pokemonType, uint16 hp, string attack, uint16 maxSupply, uint16 currentSupply, uint96 floorPrice, string imageURI))",
   "function getPoolStatus() view returns (uint16[] cardIds, uint16[] remaining)",
-  "function approve(address, uint256)",
   "function isApprovedForAll(address, address) view returns (bool)",
   "function setApprovalForAll(address, bool)",
 ] as const;
