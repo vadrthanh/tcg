@@ -12,7 +12,7 @@ import { Btn } from "../components/ui/Btn";
 import { Icon } from "../components/ui/Icon";
 import { PageHead } from "../components/PageHead";
 import { NotConnected } from "../components/NotConnected";
-import { txPending, txUpdate, txSuccess, txError } from "../components/TxToast";
+import { txPending, txSuccess, txError } from "../components/TxToast";
 
 interface Props { wallet: WalletState; }
 type Phase = "idle" | "charging" | "revealing" | "done";
@@ -41,34 +41,22 @@ export function Gacha({ wallet }: Props) {
     const provider = wallet.signer.provider!;
 
     setPulls([]); setShown(0); setPhase("charging");
-    const toastId = txPending("Step 1/2 — confirm payment…");
+    const toastId = txPending("Opening pack…");
     try {
       await assertChain(wallet.provider);
       const price = await gacha.packPrice();
       setPackPrice(formatEther(price));
 
-      // A pack opens in two transactions. Pay in commitPack(); the draw is
-      // derived from the commit block's hash in revealPack() a block later, so
-      // the outcome is unknowable when you pay. Reuse a still-valid commit if one
-      // is already on-chain (e.g. an abandoned reveal) instead of paying again.
-      const existing = await gacha.commitBlockOf(wallet.address) as bigint;
-      const window   = await gacha.REVEAL_WINDOW() as bigint;
-      const current  = BigInt(await provider.getBlockNumber());
-      const hasLiveCommit = existing !== 0n && current <= existing + window;
-      if (!hasLiveCommit) {
-        // Pre-flight: a wallet that can't cover packPrice + gas makes commitPack's
-        // gas estimation fail with a cryptic ethers "missing revert data" error.
-        // Check first and give a clear, actionable message instead.
-        const bal = await provider.getBalance(wallet.address);
-        if (bal < price) {
-          throw new Error(`Need ~${formatEther(price)} ETH + gas on Sepolia — fund this wallet from a faucet.`);
-        }
-        const commitTx = await gacha.commitPack({ value: price });
-        await commitTx.wait();
+      // Pre-flight: a wallet that can't cover packPrice + gas makes openPack's gas
+      // estimation fail with a cryptic ethers "missing revert data" error. Check
+      // first and give a clear, actionable message instead.
+      const bal = await provider.getBalance(wallet.address);
+      if (bal < price) {
+        throw new Error(`Need ~${formatEther(price)} ETH + gas on Sepolia — fund this wallet from a faucet.`);
       }
 
-      txUpdate(toastId, "Step 2/2 — confirm reveal…");
-      const tx = await gacha.revealPack();
+      // Single tx: openPack() draws + mints 5 cards and emits PackOpened.
+      const tx = await gacha.openPack({ value: price });
       const receipt = await tx.wait();
 
       const iface = gacha.interface;
@@ -78,7 +66,7 @@ export function Gacha({ wallet }: Props) {
 
       if (!log) { txError(toastId, new Error("Pack opened but no event was found")); setPhase("idle"); return; }
 
-      const tokenIds: bigint[] = log.args.tokenIds;
+      const tokenIds: bigint[] = [...log.args.tokenIds];
       const result: Pull[] = await Promise.all(tokenIds.map(async (tid) => {
         const c = await nft.getCard(tid);
         const rarity = RARITY_BY_INDEX[Number(c.rarity)];
@@ -112,7 +100,7 @@ export function Gacha({ wallet }: Props) {
   return (
     <div className="screen">
       <PageHead title="Open a Booster"
-        sub={`Pay ${packPrice} ETH for 5 random Pokémon — a payment, then a reveal a block later, so the draw is provably fair.`} />
+        sub={`Pay ${packPrice} ETH for 5 random Pokémon — drawn and minted on-chain in a single transaction.`} />
 
       {!connected ? (
         <NotConnected onConnect={wallet.connect} note="Connect your wallet to open a pack." />
@@ -133,7 +121,7 @@ export function Gacha({ wallet }: Props) {
                 <span className="pack-price mono">{packPrice} ETH · 5 cards</span>
               </div>
               <p className="pack-note faint">
-                <Icon name="lock" size={13} /> Provably fair — you pay first, cards reveal a block later, so the draw can't be known at purchase.
+                <Icon name="lock" size={13} /> Weighted on-chain draw — 5 cards minted straight to your wallet in one transaction.
               </p>
             </div>
           )}
