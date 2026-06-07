@@ -54,15 +54,32 @@ export function MarketplacePage({ wallet }: Props) {
     const id = txPending("Buying card…");
     try {
       await assertChain(wallet.provider);
+      const provider = wallet.signer.provider!;
       const value = parseEther(l.price);
-      // Pre-flight: a wallet that can't cover price + gas makes buyCard's gas
-      // estimation fail with a cryptic ethers "missing revert data" error.
-      // Check first and give a clear, actionable message instead.
-      const bal = await wallet.signer.provider!.getBalance(wallet.signer.address);
-      if (bal < value) {
-        throw new Error(`Need ~${l.price} ETH + gas on Sepolia — fund this wallet from a faucet.`);
+
+      // Estimate gas up front. When the wallet can't cover value + gas, the wallet's
+      // eth_estimateGas fails — and ethers only maps "insufficient funds" for send
+      // methods, so for estimateGas it surfaces as the cryptic "could not coalesce
+      // error". Swallow that here and let the affordability check below give a clear
+      // message; a genuine contract revert (CALL_EXCEPTION) is surfaced as-is.
+      let gasLimit = 300_000n;
+      try {
+        gasLimit = (await market.buyCard.estimateGas(l.tokenId, { value })) * 12n / 10n;
+      } catch (est) {
+        if ((est as { code?: string })?.code === "CALL_EXCEPTION") throw est;
       }
-      const tx = await market.buyCard(l.tokenId, { value });
+
+      // Pre-flight: must cover price + gas, not just price. A wallet holding ~exactly
+      // the listing price passes a price-only check, then dies in gas estimation.
+      const [bal, fee] = await Promise.all([provider.getBalance(wallet.signer.address), provider.getFeeData()]);
+      const gasPrice = fee.maxFeePerGas ?? fee.gasPrice ?? 0n;
+      const needed = value + gasLimit * gasPrice;
+      if (bal < needed) {
+        throw new Error(`Need ~${formatEther(needed)} ETH (price + gas) but wallet holds ${formatEther(bal)} ETH. Top up from a Sepolia faucet.`);
+      }
+
+      // Pass an explicit gasLimit so the send doesn't re-estimate (another coalesce vector).
+      const tx = await market.buyCard(l.tokenId, { value, gasLimit });
       await tx.wait();
       txSuccess(id, "Purchased!");
       try { await pollUntil(() => api.listings({ status: "active" }), rows => !rows.some(r => r.tokenId === l.tokenId), { attempts: 8, intervalMs: 1500 }); } catch { /* indexer lag — UI still refreshes */ }

@@ -23,6 +23,11 @@ function humanizeTxError(err: unknown): string {
   if (e?.code === "INSUFFICIENT_FUNDS") return "Not enough Sepolia ETH to cover this transaction.";
   if (e?.reason) return e.reason; // decoded contract revert reason
   if (e?.code === "CALL_EXCEPTION") return "Transaction would fail — check your Sepolia ETH balance and network.";
+  // ethers' fallback wrapper. Most often the wallet can't cover value + gas during
+  // estimation (insufficient-funds isn't mapped for eth_estimateGas), so it can't be
+  // classified. Give an actionable hint instead of dumping the raw string.
+  if (e?.code === "UNKNOWN_ERROR" || (typeof e?.message === "string" && /could not coalesce/i.test(e.message)))
+    return "Couldn't submit the transaction — usually not enough Sepolia ETH for price + gas. Check your balance and try again.";
   return String(e?.shortMessage ?? e?.message ?? "Transaction failed").slice(0, 120);
 }
 
