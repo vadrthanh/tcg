@@ -31,26 +31,24 @@
 .hero-desc { color: var(--text-dim); font-size: 16px; line-height: 1.55; max-width: 480px; }
 .hero-cta { margin-top: 26px; }
 
-/* ---------- hero card carousel (auto-scroll, left → right) ---------- */
+/* ---------- hero card carousel (auto-scroll left → right, drag/wheel to speed up) ---------- */
+/* Vertical padding gives the hover lift room inside overflow:hidden so card tops
+   aren't clipped. JS (HeroCarousel) drives the transform for scroll inertia. */
 .hero-carousel {
-  position: relative; width: 100%; overflow: hidden; padding: 6px 0;
+  position: relative; width: 100%; overflow: hidden; padding: 20px 0;
+  cursor: grab; user-select: none; touch-action: pan-y;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
           mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
 }
-.hero-carousel-track {
-  display: flex; width: max-content; align-items: stretch;
-  animation: heroScrollX 70s linear infinite; will-change: transform;
-}
-.hero-carousel:hover .hero-carousel-track { animation-play-state: paused; }
+.hero-carousel:active { cursor: grabbing; }
+.hero-carousel-track { display: flex; width: max-content; align-items: flex-start; will-change: transform; }
 .hero-carousel-card {
   flex: none; width: clamp(150px, 14vw, 190px); margin-right: 16px;
   padding: 0; border: none; background: none; cursor: pointer;
 }
 .hero-carousel-card .art { box-shadow: var(--shadow-card), 0 0 30px -18px var(--rc); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
 .hero-carousel-card:hover .art { transform: translateY(-6px) scale(1.03); }
-/* track is the list duplicated once; -50% scrolls exactly one set → seamless loop.
-   from -50% to 0 makes cards drift left → right. */
-@keyframes heroScrollX { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.hero-carousel img { pointer-events: none; -webkit-user-drag: none; }
 
 /* ---------- dashboard stats ---------- */
 .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
