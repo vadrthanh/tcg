@@ -224,8 +224,9 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
     // (royaltyInfo / getRoyaltyReceivers), so no consumer needs the event;
     // freeform mints still emit it (see PokemonCardNFT.test.ts).
     it("does NOT emit RoyaltyReceiversSet, yet royalties stay queryable via the views", async function () {
+      // Card 1 is Common (rarity 0); first mint → tokenId 0, to `user`.
       const tx = nft.connect(minter)[MINT](user.address, 1);
-      await expect(tx).to.emit(nft, "CardMinted");              // mint still signalled
+      await expect(tx).to.emit(nft, "CardMinted").withArgs(user.address, 0, 0 /* Common */);
       await expect(tx).to.not.emit(nft, "RoyaltyReceiversSet"); // intentionally omitted
 
       // Full multi-receiver set is read-through from the template.
