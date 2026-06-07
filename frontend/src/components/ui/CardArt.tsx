@@ -16,7 +16,10 @@ export function CardArt({ card, size = "md", revealing }: { card: ArtCard; size?
           src={card.imageURI}
           alt={card.name}
           loading="lazy"
-          onError={(e) => { (e.target as HTMLImageElement).src = FALLBACK; }}
+          onError={(e) => {
+            const img = e.target as HTMLImageElement;
+            if (img.src !== FALLBACK) img.src = FALLBACK; // guard: don't re-trigger if FALLBACK itself fails
+          }}
         />
       )}
     </div>
