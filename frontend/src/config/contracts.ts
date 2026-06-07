@@ -38,12 +38,23 @@ export const NFT_ABI = [
   "function getPoolStatus() view returns (uint16[] cardIds, uint16[] remaining)",
   "function isApprovedForAll(address, address) view returns (bool)",
   "function setApprovalForAll(address, bool)",
+  // Pool administration — gated to POOL_MANAGER_ROLE (the deployer).
+  "function POOL_MANAGER_ROLE() view returns (bytes32)",
+  "function hasRole(bytes32 role, address account) view returns (bool)",
+  "function addCardToPool(tuple(uint16 cardId, string name, uint8 rarity, string pokemonType, uint16 hp, string attack, uint16 maxSupply, uint16 currentSupply, uint96 floorPrice, string imageURI) template, tuple(address receiver, uint96 feeBps)[] receivers)",
 ] as const;
 
 export const GACHA_ABI = [
   "function packPrice() view returns (uint256)",
-  // Single tx: pay packPrice, draw + mint 5 cards, emit PackOpened.
-  "function openPack() payable",
+  "function CARDS_PER_PACK() view returns (uint256)",
+  "function REVEAL_WINDOW() view returns (uint256)",
+  // Block number of the caller's pending (unrevealed) commit, 0 if none.
+  "function commitBlockOf(address) view returns (uint256)",
+  // Two-step commit–reveal: commitPack() pays packPrice and records the block;
+  // revealPack() (in a later block) draws + mints 5 cards and emits PackOpened.
+  "function commitPack() payable",
+  "function revealPack()",
+  "event PackCommitted(address indexed buyer, uint256 commitBlock)",
   "event PackOpened(address indexed buyer, uint256[5] tokenIds, uint16[5] cardIds, uint8[5] rarities)",
 ] as const;
 
