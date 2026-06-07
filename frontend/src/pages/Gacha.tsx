@@ -56,7 +56,13 @@ export function Gacha({ wallet }: Props) {
       }
 
       // Single tx: openPack() draws + mints 5 cards and emits PackOpened.
-      const tx = await gacha.openPack({ value: price });
+      // Its gas varies with the randomized draw (block.prevrandao differs between
+      // estimation and mining), so the wallet's auto limit (≈ estimate, ~zero
+      // buffer) can fall just short → the mined tx runs out of gas. Estimate and
+      // add a 50% buffer; unused gas is refunded, so this prevents OOG without
+      // overcharging.
+      const gas = await gacha.openPack.estimateGas({ value: price });
+      const tx = await gacha.openPack({ value: price, gasLimit: gas + gas / 2n });
       const receipt = await tx.wait();
 
       const iface = gacha.interface;
