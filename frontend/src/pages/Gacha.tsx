@@ -185,10 +185,8 @@ export function Gacha({ wallet }: Props) {
             <div className="pack-stage">
               <div className="pack3d pack-charging">
                 <div className="pack-rays" />
-                <div className="pack-core" />
                 <div className="pack-shine" />
                 <div className="pack-logo mono">POKÉDESK</div>
-                <div className="pack-bolt charging"><Icon name="bolt" size={26} /></div>
               </div>
               <div className="charge-text mono">{note}</div>
             </div>
