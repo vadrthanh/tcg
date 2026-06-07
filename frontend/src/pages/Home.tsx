@@ -10,6 +10,7 @@ import { Btn } from "../components/ui/Btn";
 import { Stat } from "../components/ui/Stat";
 import { Progress } from "../components/ui/Progress";
 import { NotConnected } from "../components/NotConnected";
+import { HeroCarousel } from "../components/HeroCarousel";
 import { TxHistory } from "../components/TxHistory";
 
 interface Props { wallet: WalletState; go: (p: Page) => void; }
@@ -63,14 +64,9 @@ export function Home({ wallet, go }: Props) {
           </div>
           {wallet.error && <p className="faint" style={{ color: "#f87171", marginTop: 14, fontSize: 13 }}>{wallet.error}</p>}
         </div>
-        <div className="hero-r">
-          <div className="pack3d pack-mini" onClick={() => go("gacha")}>
-            <div className="pack-shine" />
-            <div className="pack-logo mono" style={{ fontSize: 24 }}>POKÉDESK</div>
-            <div className="pack-sub mono">BOOSTER · 5 CARDS</div>
-          </div>
-        </div>
       </div>
+
+      <HeroCarousel cards={cards} onClick={() => go("collection")} />
 
       {connected ? (
         <>
