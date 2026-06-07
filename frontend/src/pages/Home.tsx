@@ -23,26 +23,45 @@ export function Home({ wallet, go }: Props) {
   const [activeListings, setActiveListings] = useState<number | null>(null);
   const connected = !!wallet.address && wallet.chainOk;
 
-  useEffect(() => { api.cards().then(setCards).catch(() => {}); }, []);
+  useEffect(() => {
+    let mounted = true;
+    api.cards().then(c => { if (mounted) setCards(c); }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
-    api.listings({ status: "active" }).then(rows => setActiveListings(rows.length)).catch(() => setActiveListings(null));
+    let mounted = true;
+    api.listings({ status: "active" })
+      .then(rows => { if (mounted) setActiveListings(rows.length); })
+      .catch(() => { if (mounted) setActiveListings(null); });
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
     if (!wallet.address) { setOwnedCardIds([]); setPacksOpened(null); return; }
-    api.nftsByOwner(wallet.address).then(n => setOwnedCardIds(n.map(x => x.cardId))).catch(() => {});
+    let mounted = true;
+    api.nftsByOwner(wallet.address)
+      .then(n => { if (mounted) setOwnedCardIds(n.map(x => x.cardId)); })
+      .catch(() => {});
     api.transactions({ address: wallet.address, type: "pack_opened", limit: 100 })
-      .then(tx => setPacksOpened(tx.length))
-      .catch(() => setPacksOpened(null));
+      .then(tx => { if (mounted) setPacksOpened(tx.length); })
+      .catch(() => { if (mounted) setPacksOpened(null); });
+    return () => { mounted = false; };
   }, [wallet.address]);
 
   useEffect(() => {
     if (!wallet.provider || !wallet.address) { setClaimable(null); return; }
+    let mounted = true;
     const s = new Contract(ADDRESSES.PaymentSplitter, SPLITTER_ABI, wallet.provider);
     s.claimable(wallet.address)
-      .then((b: bigint) => setClaimable(Number(formatEther(b)).toFixed(4)))
-      .catch(() => setClaimable(null));
+      .then((b: bigint) => {
+        if (!mounted) return;
+        // Truncate to 4 dp via string ops — no float round-trip (project keeps ETH as strings).
+        const [int, frac = ""] = formatEther(b).split(".");
+        setClaimable(`${int}.${frac.padEnd(4, "0").slice(0, 4)}`);
+      })
+      .catch(() => { if (mounted) setClaimable(null); });
+    return () => { mounted = false; };
   }, [wallet.provider, wallet.address]);
 
   const total = cards.length || 40;
