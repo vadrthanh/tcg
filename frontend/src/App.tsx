@@ -73,7 +73,8 @@ export default function App() {
 
   return (
     <div className="app">
-      <Toaster position="top-right" />
+      {/* Offset below the 64px sticky topbar so toasts don't overlap the wallet/nav. */}
+      <Toaster position="top-right" containerStyle={{ top: 76 }} />
 
       <header className="topbar">
         <div className="topbar-in">
