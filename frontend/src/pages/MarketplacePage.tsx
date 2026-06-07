@@ -54,7 +54,15 @@ export function MarketplacePage({ wallet }: Props) {
     const id = txPending("Buying card…");
     try {
       await assertChain(wallet.provider);
-      const tx = await market.buyCard(l.tokenId, { value: parseEther(l.price) });
+      const value = parseEther(l.price);
+      // Pre-flight: a wallet that can't cover price + gas makes buyCard's gas
+      // estimation fail with a cryptic ethers "missing revert data" error.
+      // Check first and give a clear, actionable message instead.
+      const bal = await wallet.signer.provider!.getBalance(wallet.signer.address);
+      if (bal < value) {
+        throw new Error(`Need ~${l.price} ETH + gas on Sepolia — fund this wallet from a faucet.`);
+      }
+      const tx = await market.buyCard(l.tokenId, { value });
       await tx.wait();
       txSuccess(id, "Purchased!");
       try { await pollUntil(() => api.listings({ status: "active" }), rows => !rows.some(r => r.tokenId === l.tokenId), { attempts: 8, intervalMs: 1500 }); } catch { /* indexer lag — UI still refreshes */ }
