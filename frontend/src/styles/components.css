@@ -1,0 +1,91 @@
+/* ============================================================
+   Pokédesk — component styles
+   ============================================================ */
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px solid transparent; border-radius: var(--r-pill);
+  font-family: var(--fs); font-weight: 600; letter-spacing: -0.01em;
+  transition: transform .12s ease, background .15s ease, border-color .15s, box-shadow .15s;
+  white-space: nowrap;
+}
+.btn:active { transform: translateY(1px) scale(0.99); }
+.btn-sm { padding: 7px 13px; font-size: 13px; }
+.btn-md { padding: 10px 18px; font-size: 14.5px; }
+.btn-lg { padding: 15px 26px; font-size: 16.5px; }
+.btn-full { width: 100%; }
+
+.btn-primary {
+  background: var(--accent); color: white;
+  box-shadow: 0 8px 22px -10px var(--accent), 0 1px 0 oklch(1 0 0 / 0.25) inset;
+}
+.btn-primary:hover { background: color-mix(in oklch, var(--accent) 82%, white); box-shadow: 0 12px 30px -10px var(--accent), 0 1px 0 oklch(1 0 0 / 0.3) inset; }
+.btn-ghost { background: var(--surface); color: var(--text); border-color: var(--line); }
+.btn-ghost:hover { background: var(--surface-2); border-color: var(--line-2); }
+.btn-outline { background: transparent; color: var(--text-dim); border-color: var(--line-2); }
+.btn-outline:hover { color: var(--text); border-color: var(--accent-line); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* ---------- rarity badge ---------- */
+.rbadge {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--fs); font-weight: 600; font-size: 12.5px;
+  color: var(--rc); padding: 4px 11px 4px 9px; border-radius: var(--r-pill);
+  background: color-mix(in oklch, var(--rc) 14%, transparent);
+  border: 1px solid color-mix(in oklch, var(--rc) 32%, transparent);
+}
+.rbadge-sm { font-size: 11px; padding: 3px 9px 3px 7px; }
+.rdot { width: 7px; height: 7px; border-radius: 50%; background: var(--rc); box-shadow: 0 0 9px var(--rc); }
+
+/* ---------- type chip ---------- */
+.tchip {
+  font-family: var(--fm); font-size: 11px; font-weight: 500; letter-spacing: 0.02em;
+  color: var(--tc); padding: 3px 8px; border-radius: 7px;
+  background: color-mix(in oklch, var(--tc) 12%, transparent);
+}
+
+/* ---------- progress ---------- */
+.prog { width: 100%; background: oklch(1 0 0 / 0.07); border-radius: 99px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.2,.8,.2,1); }
+
+/* ---------- card art (real image in premium frame) ---------- */
+.art {
+  position: relative; width: 100%; border-radius: var(--r-md);
+  overflow: hidden; isolation: isolate;
+  background:
+    radial-gradient(120% 90% at 50% 10%, color-mix(in oklch, var(--tc) 30%, transparent), transparent 70%),
+    linear-gradient(160deg, var(--surface-2), var(--bg-2));
+  display: grid; place-items: center;
+  border: 1px solid var(--line);
+}
+.art-md { aspect-ratio: 1 / 1; }
+.art-sm { aspect-ratio: 1 / 1; }
+.art-lg { aspect-ratio: 3 / 4; }
+.art-stripes {
+  position: absolute; inset: 0; z-index: 0; opacity: 0.5;
+  background-image: repeating-linear-gradient(45deg, oklch(1 0 0 / 0.025) 0 9px, transparent 9px 18px);
+}
+.art-glow {
+  position: absolute; width: 60%; aspect-ratio: 1; border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle, color-mix(in oklch, var(--tc) 55%, transparent), transparent 65%);
+  filter: blur(14px); opacity: 0.7;
+}
+.art img {
+  position: relative; z-index: 1; width: 100%; height: 100%;
+  object-fit: contain; padding: 10%;
+  filter: drop-shadow(0 6px 18px color-mix(in oklch, var(--tc) 45%, transparent));
+}
+.art-reveal { animation: popIn .5s cubic-bezier(.2,1.2,.3,1) both; }
+
+/* ---------- stat ---------- */
+.stat { display: flex; flex-direction: column; gap: 3px; }
+.stat-label { font-size: 10.5px; letter-spacing: 0.13em; color: var(--text-faint); text-transform: uppercase; }
+.stat-value { font-family: var(--fs); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.stat-sub { font-size: 12px; }
+
+/* ---------- generic card surface ---------- */
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+}

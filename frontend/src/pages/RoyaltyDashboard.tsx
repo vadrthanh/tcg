@@ -1,37 +1,33 @@
-// Royalty dashboard — claimable balance, claim action, transaction history.
-//
-// Claimable is read DIRECTLY from the chain (real-time accuracy — the indexer
-// only catches `Claimed`, not the per-deposit balance changes). History is
-// pulled from /api/transactions for context.
+// Royalty dashboard — claimable balance (read directly from chain for real-time
+// accuracy), a one-click claim, and recent activity from /api/transactions.
 
 import { useCallback, useEffect, useState } from "react";
 import { Contract, formatEther } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, SPLITTER_ABI } from "../config/contracts";
-import { txPending, txSuccess, txError } from "../components/TxToast";
+import { assertChain } from "../lib/assertChain";
+import { PageHead } from "../components/PageHead";
+import { NotConnected } from "../components/NotConnected";
+import { Btn } from "../components/ui/Btn";
 import { TxHistory } from "../components/TxHistory";
+import { txPending, txSuccess, txError } from "../components/TxToast";
 
 interface Props { wallet: WalletState; }
 
 export function RoyaltyDashboard({ wallet }: Props) {
-  const [claimable, setClaimable] = useState<string | null>(null);
-  const [loading, setLoading]     = useState(false);
+  const [claimable, setClaimable]   = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const connected = !!wallet.address && wallet.chainOk;
 
   const loadClaimable = useCallback(async () => {
     if (!wallet.provider || !wallet.address) return;
     const splitter = new Contract(ADDRESSES.PaymentSplitter, SPLITTER_ABI, wallet.provider);
-    try {
-      const bal = await splitter.claimable(wallet.address);
-      setClaimable(formatEther(bal));
-    } catch (e: any) {
-      setClaimable(null);
-    }
+    try { const bal = await splitter.claimable(wallet.address); setClaimable(formatEther(bal)); }
+    catch (err: unknown) { console.error("Failed to read claimable balance:", err); setClaimable(null); }
   }, [wallet.provider, wallet.address]);
 
-  useEffect(() => {
-    loadClaimable();
-  }, [loadClaimable]);
+  useEffect(() => { loadClaimable(); }, [loadClaimable]);
 
   async function claim() {
     if (!wallet.signer) return;
@@ -39,6 +35,7 @@ export function RoyaltyDashboard({ wallet }: Props) {
     setLoading(true);
     const id = txPending("Claiming balance…");
     try {
+      await assertChain(wallet.provider);
       const tx = await splitter.claim();
       await tx.wait();
       txSuccess(id, "Claimed!");
@@ -54,62 +51,38 @@ export function RoyaltyDashboard({ wallet }: Props) {
   const hasBalance = claimable !== null && Number(claimable) > 0;
 
   return (
-    <div className="max-w-lg mx-auto py-8 px-4">
-      <h2 className="text-2xl font-bold text-white mb-2">Royalty Dashboard</h2>
-      <p className="text-gray-400 mb-6 text-sm">
-        Claim your share of pack revenue and marketplace royalties. Balances accrue
-        in the PaymentSplitter contract — withdraw at any time.
-      </p>
+    <div className="screen">
+      <PageHead title="Royalty Dashboard" sub="Your share of pack revenue and marketplace royalties accrues here — claim anytime." />
 
-      {!wallet.address ? (
-        <p className="text-yellow-400">Connect your wallet first.</p>
+      {!connected ? (
+        <NotConnected onConnect={wallet.connect} note="Connect your wallet to view and claim your royalty balance." />
       ) : (
-        <>
-          <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <p className="text-gray-400 text-sm">Connected wallet</p>
-              <p className="text-white text-sm font-mono">
-                {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
-              </p>
-            </div>
-
-            <div className="bg-gray-900 rounded-lg p-4 mb-4 flex justify-between items-center">
-              <span className="text-gray-400">Claimable balance</span>
-              <span className="text-green-400 font-bold text-lg">
-                {claimable !== null ? `${claimable} ETH` : "—"}
-              </span>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={loadClaimable}
-                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition"
-              >
-                Refresh
-              </button>
-              <button
-                onClick={claim}
-                disabled={loading || !hasBalance}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition"
-              >
-                {loading ? "Claiming…" : "Claim ETH"}
-              </button>
-            </div>
+        <div className="roy-grid">
+          <div className="panel roy-claim">
+            <div className="stat-label mono">CLAIMABLE BALANCE</div>
+            <div className="roy-big mono">◇ {claimable ?? "—"} <span>ETH</span></div>
+            <div className="faint" style={{ fontSize: 12.5 }}>Withdrawn to your wallet in a single transaction.</div>
+            <Btn kind="primary" size="lg" icon="coin" full disabled={loading || !hasBalance} onClick={claim}>
+              {loading ? "Claiming…" : "Claim ETH"}
+            </Btn>
           </div>
 
-          <TxHistory key={refreshKey} address={wallet.address} />
-        </>
-      )}
+          <div className="panel roy-how">
+            <h3 style={{ fontSize: 15, marginBottom: 14 }}>How royalties work</h3>
+            <ol className="roy-steps">
+              <li>Every pack sale deposits revenue into the splitter contract.</li>
+              <li>Every secondary sale queries EIP-2981 and deposits royalties atomically.</li>
+              <li>Your address accrues a balance — nothing is pushed automatically.</li>
+              <li>Claim withdraws your full balance in a single transaction.</li>
+            </ol>
+          </div>
 
-      <div className="mt-6 bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
-        <h3 className="text-white font-semibold mb-2 text-sm">How royalties work</h3>
-        <ol className="text-gray-400 text-xs space-y-1 list-decimal list-inside">
-          <li>Every pack sale deposits revenue into the splitter.</li>
-          <li>Every NFT sale queries EIP-2981 and deposits royalties atomically.</li>
-          <li>Your address accrues a balance — no ETH is pushed to you automatically.</li>
-          <li>Click Claim ETH to withdraw your entire balance in one transaction.</li>
-        </ol>
-      </div>
+          <div className="panel roy-break">
+            <h3 style={{ fontSize: 15, marginBottom: 12 }}>Recent activity</h3>
+            <TxHistory key={refreshKey} address={wallet.address} limit={10} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

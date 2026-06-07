@@ -1,0 +1,149 @@
+/* ============================================================
+   Pokédesk — creature card, modal & pack-opening styles
+   ============================================================ */
+
+/* ---------- creature card ---------- */
+.ccard {
+  position: relative; text-align: left; padding: 0; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+  transition: transform .16s cubic-bezier(.2,.8,.2,1), border-color .16s, box-shadow .16s;
+  color: var(--text); display: flex; flex-direction: column;
+}
+.ccard:hover { transform: translateY(-4px); border-color: var(--line-2); box-shadow: var(--shadow-card), 0 24px 40px -28px oklch(0 0 0 / 0.9); }
+.ccard-owned { border-color: color-mix(in oklch, var(--rc) 45%, transparent); }
+.ccard-owned:hover { border-color: color-mix(in oklch, var(--rc) 70%, transparent); box-shadow: var(--shadow-card), 0 0 30px -8px color-mix(in oklch, var(--rc) 60%, transparent); }
+.ccard-own {
+  position: absolute; top: 10px; left: 10px; z-index: 3;
+  font-size: 9px; letter-spacing: 0.14em; font-weight: 600; color: var(--rc);
+  background: oklch(0.16 0.018 268 / 0.8); backdrop-filter: blur(6px);
+  padding: 4px 8px; border-radius: 6px; border: 1px solid color-mix(in oklch, var(--rc) 40%, transparent);
+}
+.ccard-soldout { opacity: 0.45; filter: grayscale(0.7); }
+.ccard-soldout-tag {
+  position: absolute; top: 10px; right: 10px; z-index: 3; font-size: 9px;
+  letter-spacing: 0.14em; font-weight: 600; color: var(--r-rare);
+  background: oklch(0.16 0.018 268 / 0.8); backdrop-filter: blur(6px);
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line-2);
+}
+.ccard-art { padding: 12px 12px 0; }
+.ccard-body { padding: 13px 15px 15px; display: flex; flex-direction: column; }
+.ccard-name { font-family: var(--fs); font-weight: 600; font-size: 16px; letter-spacing: -0.02em; }
+.ccard-id { font-size: 12px; margin-top: 2px; }
+.ccard-hp { font-size: 12px; color: var(--text-dim); }
+.ccard-floor { font-size: 12.5px; }
+
+/* inventory inline list-for-sale */
+.inv-price-input {
+  width: 100%; padding: 8px 11px; border-radius: var(--r-sm);
+  background: var(--bg-2); border: 1px solid var(--line-2);
+  color: var(--text); font-size: 13px;
+}
+.inv-price-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inv-list-btn { margin-top: 10px; }
+
+/* ---------- modal ---------- */
+.modal-scrim {
+  position: fixed; inset: 0; z-index: 50; background: oklch(0.1 0.01 268 / 0.72);
+  backdrop-filter: blur(8px); display: grid; place-items: center; padding: 24px;
+  animation: floatUp .25s both;
+}
+.modal { width: min(720px, 100%); padding: 28px; position: relative; box-shadow: var(--shadow-pop); }
+.modal-x {
+  position: absolute; top: 16px; right: 16px; z-index: 4; width: 34px; height: 34px;
+  border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--text-dim); font-size: 14px; display: grid; place-items: center;
+}
+.modal-x:hover { color: var(--text); background: var(--surface-3); }
+.modal-grid { display: grid; grid-template-columns: 230px 1fr; gap: 28px; }
+.modal-art { border-radius: var(--r-md); overflow: hidden; box-shadow: 0 0 40px -16px var(--rc); }
+.modal-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+@media (max-width: 600px) { .modal-grid { grid-template-columns: 1fr; gap: 20px; } .modal-art { max-width: 200px; margin: 0 auto; } }
+
+/* ---------- wallet picker ---------- */
+.wallet-modal { width: min(420px, 100%); }
+.wallet-list { display: flex; flex-direction: column; gap: 10px; }
+.wallet-option {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px;
+  border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--text); cursor: pointer; transition: background .15s, border-color .15s, transform .1s;
+}
+.wallet-option:hover { background: var(--surface-3); border-color: var(--accent); }
+.wallet-option:active { transform: scale(0.99); }
+.wallet-icon { border-radius: 8px; flex: 0 0 auto; object-fit: contain; }
+.wallet-icon-fallback {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  background: var(--surface-3); color: var(--accent-text); font-size: 15px;
+}
+.wallet-option-name { font-weight: 600; font-size: 15px; flex: 1 1 auto; text-align: left; }
+.wallet-option-go { color: var(--text-dim); font-size: 16px; }
+
+/* ---------- admin: add card ---------- */
+.admin-form { padding: 24px; }
+.admin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.adm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.adm-field-full { grid-column: 1 / -1; }
+.adm-label { font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.adm-hint { font-weight: 400; font-size: 11px; }
+.adm-in {
+  width: 100%; padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text);
+  font-size: 14px; transition: border-color .15s;
+}
+.adm-in:focus { outline: none; border-color: var(--accent); }
+.admin-roy { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { .admin-grid { grid-template-columns: 1fr; } }
+
+/* ---------- pack opening ---------- */
+.pack-stage { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 30px 0 40px; }
+.pack-pedestal { position: relative; padding: 10px 60px 0; }
+.pack-pedestal::after { content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+  width: 200px; height: 26px; border-radius: 50%;
+  background: radial-gradient(ellipse, var(--accent-soft), transparent 70%); filter: blur(6px); }
+.pack-cta { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.pack-cta .pack-price { font-size: 12.5px; color: var(--text-faint); letter-spacing: 0.04em; }
+.pack-note { display: flex; align-items: center; gap: 8px; max-width: 420px; text-align: center;
+  font-size: 12.5px; line-height: 1.5; justify-content: center; }
+.pack-note svg { flex: none; opacity: 0.7; }
+.pack3d {
+  position: relative; width: 230px; height: 320px; border-radius: 20px; cursor: pointer;
+  background: linear-gradient(150deg, oklch(0.30 0.10 285), oklch(0.20 0.06 295) 55%, oklch(0.16 0.02 268));
+  border: 1px solid var(--accent-line); overflow: hidden;
+  box-shadow: 0 40px 80px -40px var(--accent), 0 0 0 1px oklch(1 0 0 / 0.05) inset;
+  display: grid; place-content: center; gap: 6px; text-align: center;
+  transition: transform .3s cubic-bezier(.2,.8,.2,1);
+  animation: floatUp .5s both;
+}
+.pack3d:hover { transform: translateY(-6px) rotate(-1deg) scale(1.02); }
+.pack-shine { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, oklch(1 0 0 / 0.14) 48%, transparent 60%); background-size: 250% 100%; animation: shimmer 4s linear infinite; }
+.pack-logo { font-family: var(--fs); font-weight: 700; font-size: 30px; letter-spacing: 0.12em; color: white; text-shadow: 0 2px 24px var(--accent); }
+.pack-sub { font-size: 10px; letter-spacing: 0.25em; color: oklch(0.9 0.05 285); }
+.pack-bolt { position: absolute; top: 18px; left: 18px; color: oklch(0.95 0.1 285); }
+.pack-bolt.charging { animation: flameWobble .5s ease-in-out infinite; top: auto; left: auto; position: static; }
+.pack-charging { animation: flameWobble .8s ease-in-out infinite; }
+.pack-rays { position: absolute; inset: -40%; background: conic-gradient(from 0deg, transparent, oklch(1 0 0 / 0.12), transparent, oklch(1 0 0 / 0.12), transparent); animation: spinSlow 3s linear infinite; }
+.charge-text { font-size: 12px; letter-spacing: 0.22em; color: var(--accent-text); animation: pulseGlow 1s ease-in-out infinite; }
+
+/* ---------- reveal ---------- */
+.reveal-stage { display: flex; flex-direction: column; align-items: center; gap: 30px; padding: 16px 0 40px; }
+.reveal-row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.reveal-card { width: 150px; perspective: 1000px; }
+.reveal-inner { position: relative; width: 100%; aspect-ratio: 3/4; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,1,.4,1); }
+.reveal-card.flipped .reveal-inner { transform: rotateY(180deg); }
+.reveal-back, .reveal-front { position: absolute; inset: 0; backface-visibility: hidden; border-radius: var(--r-md); }
+.reveal-back {
+  display: grid; place-items: center; border: 1px solid var(--accent-line);
+  background: linear-gradient(150deg, oklch(0.28 0.09 285), oklch(0.17 0.03 280));
+}
+.reveal-back span { font-family: var(--fs); font-weight: 700; letter-spacing: 0.18em; color: white; opacity: 0.85; font-size: 13px; }
+.reveal-front { transform: rotateY(180deg); display: flex; flex-direction: column; gap: 8px;
+  border: 1px solid color-mix(in oklch, var(--rc) 55%, transparent); padding: 8px;
+  background: var(--surface); box-shadow: 0 0 26px -8px var(--rc); }
+.reveal-meta { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; padding: 0 2px 2px; }
+.reveal-actions { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.reveal-summary { display: flex; flex-direction: column; align-items: center; gap: 9px;
+  padding: 18px 30px; border-radius: var(--r-lg); background: var(--bg-2);
+  border: 1px solid color-mix(in oklch, var(--rc) 28%, var(--line));
+  box-shadow: 0 0 36px -16px var(--rc); min-width: 280px; }
+.rs-label { font-size: 10.5px; letter-spacing: 0.2em; color: var(--text-faint); white-space: nowrap; }
+.rs-name { font-family: var(--fs); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
