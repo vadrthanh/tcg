@@ -41,9 +41,10 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
       throw new Error(body.error ?? `HTTP ${res.status}`);
     }
     return await res.json();
-  } catch (err: any) {
+  } catch (err) {
     // Network errors (server down, CORS, DNS) — treat as unavailable.
-    if (err.name === "TypeError" || err.name === "ApiUnavailableError" || err.message?.includes("fetch")) {
+    const e = err as { name?: string; message?: string };
+    if (e.name === "TypeError" || e.name === "ApiUnavailableError" || e.message?.includes("fetch")) {
       throw new ApiUnavailableError(err);
     }
     throw err;
