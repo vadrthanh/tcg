@@ -73,15 +73,26 @@ export function Gacha({ wallet }: Props) {
       const hasLiveCommit = commitBlock !== 0 && tip <= commitBlock + window;
 
       if (!hasLiveCommit) {
-        // Pre-flight: a wallet that can't cover packPrice + gas makes commitPack's
-        // gas estimation fail with a cryptic ethers "missing revert data" error.
-        // Check first and give a clear, actionable message instead.
-        const bal = await provider.getBalance(me);
-        if (bal < price) {
-          throw new Error(`Need ~${formatEther(price)} ETH + gas on Sepolia — fund this wallet from a faucet.`);
+        // Estimate commit gas; if the wallet is underfunded estimateGas surfaces as
+        // ethers' cryptic "could not coalesce error", so fall back to a budget and let
+        // the affordability check produce a clear message instead.
+        let gasLimit = 200_000n;
+        try {
+          gasLimit = (await gacha.commitPack.estimateGas({ value: price })) * 12n / 10n;
+        } catch (est) {
+          if ((est as { code?: string })?.code === "CALL_EXCEPTION") throw est;
         }
+
+        // Pre-flight: must cover packPrice + gas, not just packPrice.
+        const [bal, fee] = await Promise.all([provider.getBalance(me), provider.getFeeData()]);
+        const gasPrice = fee.maxFeePerGas ?? fee.gasPrice ?? 0n;
+        const needed = price + gasLimit * gasPrice;
+        if (bal < needed) {
+          throw new Error(`Need ~${formatEther(needed)} ETH (pack + gas) but wallet holds ${formatEther(bal)} ETH. Top up from a Sepolia faucet.`);
+        }
+
         setNote("CONFIRM PAYMENT IN YOUR WALLET…");
-        const cTx    = await gacha.commitPack({ value: price });
+        const cTx    = await gacha.commitPack({ value: price, gasLimit });
         const cRcpt  = await cTx.wait();
         commitBlock  = cRcpt.blockNumber;
       }
