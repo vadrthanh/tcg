@@ -36,6 +36,11 @@
     "type": "error"
   },
   {
+    "inputs": [],
+    "name": "CommitExpired",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
         "internalType": "uint256",
@@ -44,6 +49,11 @@
       }
     ],
     "name": "InvalidFeeBps",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NoPendingCommit",
     "type": "error"
   },
   {
@@ -70,7 +80,17 @@
   },
   {
     "inputs": [],
+    "name": "PendingCommitExists",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "ReentrancyGuardReentrantCall",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "RevealTooEarly",
     "type": "error"
   },
   {
@@ -106,6 +126,25 @@
       }
     ],
     "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "buyer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "commitBlock",
+        "type": "uint256"
+      }
+    ],
+    "name": "PackCommitted",
     "type": "event"
   },
   {
@@ -192,6 +231,45 @@
   },
   {
     "inputs": [],
+    "name": "REVEAL_WINDOW",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "commitBlockOf",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "commitPack",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "issuer",
     "outputs": [
       {
@@ -214,13 +292,6 @@
       }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "openPack",
-    "outputs": [],
-    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -278,6 +349,13 @@
   {
     "inputs": [],
     "name": "renounceOwnership",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "revealPack",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

@@ -23,6 +23,7 @@ export function Gacha({ wallet }: Props) {
   const [pulls, setPulls] = useState<Pull[]>([]);
   const [shown, setShown] = useState(0);
   const [packPrice, setPackPrice] = useState("0.01");
+  const [note, setNote]   = useState("REVEALING ON-CHAIN…");
   const connected = !!wallet.address && wallet.chainOk;
 
   // Staged reveal: flip one card every 380ms, then settle into the summary.
@@ -51,30 +52,50 @@ export function Gacha({ wallet }: Props) {
     const gacha = new Contract(ADDRESSES.GachaPack, GACHA_ABI, wallet.signer);
     const nft   = new Contract(ADDRESSES.PokemonCardNFT, NFT_ABI, wallet.signer);
     const provider = wallet.signer.provider!;
+    const me = wallet.address;
 
-    setPulls([]); setShown(0); setPhase("charging");
+    setPulls([]); setShown(0); setNote("REVEALING ON-CHAIN…"); setPhase("charging");
     const toastId = txPending("Opening pack…");
     try {
       await assertChain(wallet.provider);
       const price = await gacha.packPrice();
       setPackPrice(formatEther(price));
 
-      // Pre-flight: a wallet that can't cover packPrice + gas makes openPack's gas
-      // estimation fail with a cryptic ethers "missing revert data" error. Check
-      // first and give a clear, actionable message instead.
-      const bal = await provider.getBalance(wallet.address);
-      if (bal < price) {
-        throw new Error(`Need ~${formatEther(price)} ETH + gas on Sepolia — fund this wallet from a faucet.`);
+      // The deployed GachaPack uses a two-step commit–reveal so the draw outcome
+      // is unknowable at payment time (anti re-roll). Step 1 commitPack() pays and
+      // records the block; step 2 revealPack(), in a *later* block, mints the 5
+      // cards from blockhash(commitBlock). We recover any pre-existing commit so a
+      // half-finished open (e.g. page reload between the two txs) still completes
+      // without paying twice.
+      const window = Number(await gacha.REVEAL_WINDOW().catch(() => 256n));
+      let commitBlock = Number(await gacha.commitBlockOf(me));
+      const tip = await provider.getBlockNumber();
+      const hasLiveCommit = commitBlock !== 0 && tip <= commitBlock + window;
+
+      if (!hasLiveCommit) {
+        // Pre-flight: a wallet that can't cover packPrice + gas makes commitPack's
+        // gas estimation fail with a cryptic ethers "missing revert data" error.
+        // Check first and give a clear, actionable message instead.
+        const bal = await provider.getBalance(me);
+        if (bal < price) {
+          throw new Error(`Need ~${formatEther(price)} ETH + gas on Sepolia — fund this wallet from a faucet.`);
+        }
+        setNote("CONFIRM PAYMENT IN YOUR WALLET…");
+        const cTx    = await gacha.commitPack({ value: price });
+        const cRcpt  = await cTx.wait();
+        commitBlock  = cRcpt.blockNumber;
       }
 
-      // Single tx: openPack() draws + mints 5 cards and emits PackOpened.
-      // Its gas varies with the randomized draw (block.prevrandao differs between
-      // estimation and mining), so the wallet's auto limit (≈ estimate, ~zero
-      // buffer) can fall just short → the mined tx runs out of gas. Estimate and
-      // add a 50% buffer; unused gas is refunded, so this prevents OOG without
-      // overcharging.
-      const gas = await gacha.openPack.estimateGas({ value: price });
-      const tx = await gacha.openPack({ value: price, gasLimit: gas + gas / 2n });
+      // revealPack() requires block.number > commitBlock — wait for the next block.
+      setNote("SECURING YOUR DRAW — WAITING FOR THE NEXT BLOCK…");
+      await waitForBlockAfter(provider, commitBlock);
+
+      // Reveal: draws + mints 5 cards and emits PackOpened. Gas varies with the
+      // randomized draw, so estimate and add a 50% buffer to avoid out-of-gas;
+      // unused gas is refunded.
+      setNote("REVEALING YOUR CARDS ON-CHAIN…");
+      const gas    = await gacha.revealPack.estimateGas();
+      const tx     = await gacha.revealPack({ gasLimit: gas + gas / 2n });
       const receipt = await tx.wait();
 
       const iface = gacha.interface;
@@ -117,9 +138,9 @@ export function Gacha({ wallet }: Props) {
 
   // Header copy follows the flow so it stops prompting "Pay …" once a pack is paid for.
   const headSub =
-    phase === "charging"                       ? "Opening your booster on-chain — confirm in your wallet, then wait for the mint."
+    phase === "charging"                       ? "Opening your booster on-chain — commit pays for the pack, then a reveal in a later block mints your cards."
     : phase === "revealing" || phase === "done" ? "Your 5 Pokémon, minted straight to your wallet. Open another anytime."
-    :                                             `Pay ${packPrice} ETH for 5 random Pokémon — drawn and minted on-chain in a single transaction.`;
+    :                                             `Pay ${packPrice} ETH for 5 random Pokémon — a commit–reveal draw (two quick wallet confirmations) keeps the odds fair.`;
 
   return (
     <div className="screen">
@@ -144,7 +165,7 @@ export function Gacha({ wallet }: Props) {
                 <span className="pack-price mono">{packPrice} ETH · 5 cards</span>
               </div>
               <p className="pack-note faint">
-                <Icon name="lock" size={13} /> Weighted on-chain draw — 5 cards minted straight to your wallet in one transaction.
+                <Icon name="lock" size={13} /> Weighted commit–reveal draw — 5 cards minted straight to your wallet. Two quick wallet confirmations.
               </p>
             </div>
           )}
@@ -157,7 +178,7 @@ export function Gacha({ wallet }: Props) {
                 <div className="pack-logo mono">POKÉDESK</div>
                 <div className="pack-bolt charging"><Icon name="bolt" size={26} /></div>
               </div>
-              <div className="charge-text mono">REVEALING ON-CHAIN…</div>
+              <div className="charge-text mono">{note}</div>
             </div>
           )}
 
@@ -219,4 +240,23 @@ export function Gacha({ wallet }: Props) {
       </div>
     </div>
   );
+}
+
+// Poll until the chain advances past `block` (revealPack needs block.number >
+// commitBlock). Sepolia blocks are ~12s; we allow ~2 min before giving up so a
+// committed-but-unrevealed pack can be retried via Open Booster without paying again.
+async function waitForBlockAfter(
+  provider: { getBlockNumber: () => Promise<number> },
+  block: number,
+  timeoutMs = 120_000,
+): Promise<number> {
+  const start = Date.now();
+  for (;;) {
+    const n = await provider.getBlockNumber();
+    if (n > block) return n;
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Timed out waiting for the reveal block. Your payment is safe — press Open Booster again to reveal your pack.");
+    }
+    await new Promise(r => setTimeout(r, 3000));
+  }
 }

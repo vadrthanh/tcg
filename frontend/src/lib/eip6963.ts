@@ -12,9 +12,42 @@ export interface Eip1193 {
   removeListener: (event: string, handler: (...args: unknown[]) => void) => void;
 }
 
-interface Eip6963Detail {
-  info: { uuid: string; name: string; icon: string; rdns: string };
+export interface WalletInfo { uuid: string; name: string; icon: string; rdns: string; }
+
+export interface DiscoveredWallet {
+  info: WalletInfo;
   provider: Eip1193;
+}
+
+// Backwards-compatible alias.
+type Eip6963Detail = DiscoveredWallet;
+
+// Ask every EIP-6963 wallet to announce itself and collect them all (deduped by
+// uuid) so the UI can let the user pick which one to connect — Rabby, MetaMask,
+// OKX, etc. Falls back to the legacy `window.ethereum` injection when no wallet
+// implements EIP-6963. Resolves [] if no wallet exists.
+export function discoverWallets(timeoutMs = 300): Promise<DiscoveredWallet[]> {
+  return new Promise(resolve => {
+    if (typeof window === "undefined") { resolve([]); return; }
+
+    const seen: DiscoveredWallet[] = [];
+    const onAnnounce = (e: Event) => {
+      const d = (e as CustomEvent<DiscoveredWallet>).detail;
+      if (d?.provider && !seen.some(s => s.info.uuid === d.info.uuid)) seen.push(d);
+    };
+
+    window.addEventListener("eip6963:announceProvider", onAnnounce as EventListener);
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+
+    window.setTimeout(() => {
+      window.removeEventListener("eip6963:announceProvider", onAnnounce as EventListener);
+      const legacy = window.ethereum as Eip1193 | undefined;
+      if (seen.length === 0 && legacy) {
+        seen.push({ info: { uuid: "legacy", name: "Browser Wallet", icon: "", rdns: "legacy" }, provider: legacy });
+      }
+      resolve(seen);
+    }, timeoutMs);
+  });
 }
 
 // Ask any EIP-6963 wallets to announce themselves, collect them for `timeoutMs`,
