@@ -237,8 +237,15 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
 
     // ─── Minting — template-based (used by GachaPack) ─────────────────────────
 
-    /// @notice Mint one card by template cardId. Reads metadata + royalties from
-    ///         the pool, increments currentSupply, reverts if sold out.
+    /// @notice Mint one card by template cardId. Increments currentSupply,
+    ///         reverts if sold out.
+    /// @dev Gas: stores ONLY the token→template link (`tokenCardId`). The card's
+    ///      metadata and royalty receivers are NOT duplicated per token — they
+    ///      live once in `cardPool[cardId]` / `_poolRoyaltyReceivers[cardId]` and
+    ///      are read back through `tokenCardId` by getCard / tokenURI /
+    ///      royaltyInfo / getRoyaltyReceivers. This removes ~10 cold SSTOREs per
+    ///      mint (the 102-byte imageURI string alone was ~5 slots), the dominant
+    ///      cost of a 5-card pack open.
     function mintCard(address to, uint16 cardId)
         external onlyRole(MINTER_ROLE)
         returns (uint256 tokenId)
@@ -249,15 +256,11 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
 
         tpl.currentSupply++;
 
-        Card memory data = Card({
-            name:        tpl.name,
-            rarity:      tpl.rarity,
-            pokemonType: tpl.pokemonType,
-            hp:          tpl.hp,
-            imageURI:    tpl.imageURI
-        });
-
-        tokenId = _mintCardInternal(to, data, _poolRoyaltyReceivers[cardId], cardId);
+        tokenId = _nextTokenId++;
+        tokenCardId[tokenId] = cardId;          // sole per-token write
+        Rarity r = tpl.rarity;                  // warm SLOAD (same slot as currentSupply)
+        _safeMint(to, tokenId);                 // CEI: link written before callback
+        emit CardMinted(to, tokenId, r);
     }
 
     // ─── Minting — freeform (kept for direct/admin minting & tests) ───────────
@@ -283,21 +286,22 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
         RoyaltyReceiver[] memory rxMem = new RoyaltyReceiver[](receivers.length);
         for (uint256 i; i < receivers.length; ++i) rxMem[i] = receivers[i];
 
-        tokenId = _mintCardInternal(to, data, rxMem, 0);
+        tokenId = _mintFreeform(to, data, rxMem);
     }
 
-    /// @dev CEI: all state writes happen BEFORE _safeMint so that any
+    /// @dev Freeform mint only: no pool template exists, so metadata + royalties
+    ///      are persisted per token (tokenCardId stays 0, the freeform sentinel).
+    ///      Pool mints take the cheaper path in mintCard(to, cardId).
+    ///      CEI: all state writes happen BEFORE _safeMint so any
     ///      onERC721Received callback sees a fully initialised token.
-    function _mintCardInternal(
+    function _mintFreeform(
         address to,
         Card memory data,
-        RoyaltyReceiver[] memory receivers,
-        uint16 poolCardId // 0 for freeform mints
+        RoyaltyReceiver[] memory receivers
     ) internal returns (uint256 tokenId) {
         tokenId = _nextTokenId++;
         // ── Effects (before external call) ────────────────────────────────────
         _cards[tokenId] = data;
-        if (poolCardId != 0) tokenCardId[tokenId] = poolCardId;
         for (uint256 i; i < receivers.length; ++i) {
             _royaltyReceivers[tokenId].push(receivers[i]);
         }
@@ -313,7 +317,7 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
         public view override
         returns (address receiver, uint256 royaltyAmount)
     {
-        RoyaltyReceiver[] storage rxs = _royaltyReceivers[tokenId];
+        RoyaltyReceiver[] storage rxs = _effectiveReceivers(tokenId);
         if (rxs.length == 0) return (address(0), 0);
 
         receiver      = rxs[0].receiver;
@@ -324,6 +328,17 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
         external view
         returns (RoyaltyReceiver[] memory)
     {
+        return _effectiveReceivers(tokenId);
+    }
+
+    /// @dev Royalty receivers for a token: pool mints read the shared template
+    ///      entry via tokenCardId; freeform mints (cardId 0) read per-token.
+    function _effectiveReceivers(uint256 tokenId)
+        internal view
+        returns (RoyaltyReceiver[] storage)
+    {
+        uint16 cid = tokenCardId[tokenId];
+        if (cid != 0) return _poolRoyaltyReceivers[cid];
         return _royaltyReceivers[tokenId];
     }
 
@@ -331,12 +346,22 @@ contract PokemonCardNFT is ERC721, ERC2981, AccessControl {
 
     function getCard(uint256 tokenId) external view returns (Card memory) {
         _requireOwned(tokenId);
-        return _cards[tokenId];
+        uint16 cid = tokenCardId[tokenId];
+        if (cid == 0) return _cards[tokenId];          // freeform mint
+        CardTemplate storage tpl = cardPool[cid];      // pool mint: read template
+        return Card({
+            name:        tpl.name,
+            rarity:      tpl.rarity,
+            pokemonType: tpl.pokemonType,
+            hp:          tpl.hp,
+            imageURI:    tpl.imageURI
+        });
     }
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         _requireOwned(tokenId);
-        return _cards[tokenId].imageURI;
+        uint16 cid = tokenCardId[tokenId];
+        return cid == 0 ? _cards[tokenId].imageURI : cardPool[cid].imageURI;
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
