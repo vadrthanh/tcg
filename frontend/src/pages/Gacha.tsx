@@ -56,6 +56,13 @@ export function Gacha({ wallet }: Props) {
       const current  = BigInt(await provider.getBlockNumber());
       const hasLiveCommit = existing !== 0n && current <= existing + window;
       if (!hasLiveCommit) {
+        // Pre-flight: a wallet that can't cover packPrice + gas makes commitPack's
+        // gas estimation fail with a cryptic ethers "missing revert data" error.
+        // Check first and give a clear, actionable message instead.
+        const bal = await provider.getBalance(wallet.address);
+        if (bal < price) {
+          throw new Error(`Need ~${formatEther(price)} ETH + gas on Sepolia — fund this wallet from a faucet.`);
+        }
         const commitTx = await gacha.commitPack({ value: price });
         await commitTx.wait();
       }
