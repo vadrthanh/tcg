@@ -218,6 +218,27 @@ describe("PokemonCardNFT — Card Pool & Inventory", function () {
       expect(rxs[0].feeBps).to.equal(300);
     });
 
+    // Gas optimization: pool mints store only tokenCardId and derive royalties
+    // from the template, so they intentionally skip the per-token
+    // RoyaltyReceiversSet event. EIP-2981 discovery is view-based
+    // (royaltyInfo / getRoyaltyReceivers), so no consumer needs the event;
+    // freeform mints still emit it (see PokemonCardNFT.test.ts).
+    it("does NOT emit RoyaltyReceiversSet, yet royalties stay queryable via the views", async function () {
+      const tx = nft.connect(minter)[MINT](user.address, 1);
+      await expect(tx).to.emit(nft, "CardMinted");              // mint still signalled
+      await expect(tx).to.not.emit(nft, "RoyaltyReceiversSet"); // intentionally omitted
+
+      // Full multi-receiver set is read-through from the template.
+      const rxs = await nft.getRoyaltyReceivers(0);
+      expect(rxs.map((r: any) => [r.receiver, Number(r.feeBps)]))
+        .to.deep.equal([[user.address, 300], [admin.address, 200]]);
+
+      // EIP-2981 royaltyInfo resolves to the first receiver at 3% (300 bps).
+      const [recv, amt] = await nft.royaltyInfo(0, ethers.parseEther("1"));
+      expect(recv).to.equal(user.address);
+      expect(amt).to.equal(ethers.parseEther("0.03"));
+    });
+
     it("mints up to maxSupply successfully", async function () {
       await nft.connect(minter)[MINT](user.address, 1); // supply 1/2
       await nft.connect(minter)[MINT](user.address, 1); // supply 2/2
