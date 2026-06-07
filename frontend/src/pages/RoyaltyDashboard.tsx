@@ -23,7 +23,7 @@ export function RoyaltyDashboard({ wallet }: Props) {
     if (!wallet.provider || !wallet.address) return;
     const splitter = new Contract(ADDRESSES.PaymentSplitter, SPLITTER_ABI, wallet.provider);
     try { const bal = await splitter.claimable(wallet.address); setClaimable(formatEther(bal)); }
-    catch (err) { console.error("Failed to read claimable balance:", err); setClaimable(null); }
+    catch (err: unknown) { console.error("Failed to read claimable balance:", err); setClaimable(null); }
   }, [wallet.provider, wallet.address]);
 
   useEffect(() => { loadClaimable(); }, [loadClaimable]);
