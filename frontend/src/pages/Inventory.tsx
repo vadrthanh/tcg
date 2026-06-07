@@ -13,10 +13,27 @@ import {
   RARITY_COLORS, RARITY_GLOW,
 } from "../config/contracts";
 import { api, ApiUnavailableError, apiConfigured, pollUntil } from "../lib/api";
+import { assertChain } from "../lib/assertChain";
+import { safeImageUrl, PLACEHOLDER_IMG } from "../lib/safeImageUrl";
 import type { MintedNFTRow, Rarity } from "../lib/types";
 import { txPending, txSuccess, txError } from "../components/TxToast";
+import toast from "react-hot-toast";
 
 interface Props { wallet: WalletState; }
+
+// Validate the user-entered price before parseEther: non-empty, a number, > 0,
+// and no more than 18 decimals (the wei limit). Returns an error message, or
+// null when the price is valid.
+function validatePrice(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return "Please enter a price";
+  const n = Number(trimmed);
+  if (Number.isNaN(n)) return "Invalid price";
+  if (n <= 0) return "Price must be greater than 0";
+  const decimals = trimmed.includes(".") ? trimmed.split(".")[1].length : 0;
+  if (decimals > 18) return "At most 18 decimal places";
+  return null;
+}
 
 const RARITY_INDEX: Record<Rarity, number> = {
   Common: 0, Uncommon: 1, Rare: 2, UltraRare: 3, Legendary: 4,
@@ -137,13 +154,19 @@ function InventoryTile({
   const suggest = card.floorPrice;
 
   async function listForSale() {
-    if (!wallet.signer || !price) return;
+    if (!wallet.signer) return;
+
+    // Validate the price BEFORE touching parseEther / the contract.
+    const priceErr = validatePrice(price);
+    if (priceErr) { toast.error(priceErr); return; }
+
     const nftC    = new Contract(ADDRESSES.PokemonCardNFT, NFT_ABI,    wallet.signer);
     const marketC = new Contract(ADDRESSES.Marketplace,    MARKET_ABI, wallet.signer);
 
     let toastId = txPending("Approving marketplace…");
     setBusy(true);
     try {
+      await assertChain(wallet.provider);
       // approval might be unnecessary if setApprovalForAll was used previously
       const isApprovedAll = await nftC.isApprovedForAll(wallet.signer.address, ADDRESSES.Marketplace);
       if (!isApprovedAll) {
@@ -164,7 +187,7 @@ function InventoryTile({
           rows => rows.some(r => r.tokenId === nft.tokenId),
           { attempts: 8, intervalMs: 1500 },
         );
-      } catch {}
+      } catch { /* indexer lag — fine, the UI still refreshes below */ }
 
       setOpen(false); setPrice("");
       onListed();
@@ -178,11 +201,11 @@ function InventoryTile({
   return (
     <div className={`bg-gray-800 rounded-xl overflow-hidden border-2 ${RARITY_GLOW[rIdx] ? `shadow-lg ${RARITY_GLOW[rIdx]} border-current` : "border-gray-700"} transition`}>
       <img
-        src={card.imageURI}
+        src={safeImageUrl(card.imageURI)}
         alt={card.name}
         loading="lazy"
         className="w-full h-28 object-contain bg-gray-900 p-1"
-        onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/120?text=?"; }}
+        onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER_IMG; }}
       />
       <div className="p-2">
         <p className="text-white text-xs font-bold truncate">{card.name}</p>
@@ -285,7 +308,7 @@ async function fetchOwnedFromChain(wallet: WalletState): Promise<MintedNFTRow[]>
             createdAt:     "",
           },
         });
-      } catch {}
+      } catch { /* tokenId doesn't exist / can't be read — skip it */ }
     }),
   );
   out.sort((a, b) => a.tokenId - b.tokenId);

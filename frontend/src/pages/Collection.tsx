@@ -8,6 +8,7 @@ import { Contract, formatEther } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, NFT_ABI, RARITY_COLORS, RARITY_GLOW } from "../config/contracts";
 import { api, ApiUnavailableError, apiConfigured } from "../lib/api";
+import { safeImageUrl, PLACEHOLDER_IMG } from "../lib/safeImageUrl";
 import type { CardRow, Rarity } from "../lib/types";
 
 interface Props { wallet: WalletState; }
@@ -163,11 +164,11 @@ function CardTile({ card, owned }: { card: CardRow; owned: boolean }) {
         </span>
       )}
       <img
-        src={card.imageURI}
+        src={safeImageUrl(card.imageURI)}
         alt={card.name}
         loading="lazy"
         className="w-full h-28 object-contain bg-gray-900 p-1"
-        onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/120?text=?"; }}
+        onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER_IMG; }}
       />
       <div className="p-2">
         <p className="text-white text-xs font-bold truncate">{card.name}</p>

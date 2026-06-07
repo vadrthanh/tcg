@@ -3,6 +3,7 @@ import { Contract, formatEther } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, GACHA_ABI, NFT_ABI } from "../config/contracts";
 import { api, pollUntil } from "../lib/api";
+import { assertChain } from "../lib/assertChain";
 import { CardFlip } from "../components/CardFlip";
 import { txPending, txUpdate, txSuccess, txError } from "../components/TxToast";
 
@@ -35,6 +36,7 @@ export function Gacha({ wallet }: Props) {
 
     const toastId = txPending("Step 1/2 — confirm payment…");
     try {
+      await assertChain(wallet.provider);
       const price = await gacha.packPrice();
       setPackPrice(formatEther(price));
 

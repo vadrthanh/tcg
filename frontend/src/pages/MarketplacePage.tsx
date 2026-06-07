@@ -13,6 +13,8 @@ import {
   RARITY_COLORS, RARITY_GLOW,
 } from "../config/contracts";
 import { api, ApiUnavailableError, apiConfigured, pollUntil } from "../lib/api";
+import { assertChain } from "../lib/assertChain";
+import { safeImageUrl, PLACEHOLDER_IMG } from "../lib/safeImageUrl";
 import type { ListingRow, Rarity } from "../lib/types";
 import { txPending, txSuccess, txError } from "../components/TxToast";
 
@@ -72,6 +74,7 @@ export function MarketplacePage({ wallet }: Props) {
     const market = new Contract(ADDRESSES.Marketplace, MARKET_ABI, wallet.signer);
     const id = txPending("Buying card…");
     try {
+      await assertChain(wallet.provider);
       const tx = await market.buyCard(l.tokenId, { value: parseEther(l.price) });
       await tx.wait();
       txSuccess(id, "Purchased!");
@@ -82,7 +85,7 @@ export function MarketplacePage({ wallet }: Props) {
           rows => !rows.some(r => r.tokenId === l.tokenId),
           { attempts: 8, intervalMs: 1500 },
         );
-      } catch {}
+      } catch { /* indexer lag — the load() below still updates the UI */ }
       await load();
     } catch (e) { txError(id, e); }
   }
@@ -92,6 +95,7 @@ export function MarketplacePage({ wallet }: Props) {
     const market = new Contract(ADDRESSES.Marketplace, MARKET_ABI, wallet.signer);
     const id = txPending("Cancelling listing…");
     try {
+      await assertChain(wallet.provider);
       const tx = await market.cancelListing(l.tokenId);
       await tx.wait();
       txSuccess(id, "Cancelled");
@@ -101,7 +105,7 @@ export function MarketplacePage({ wallet }: Props) {
           rows => !rows.some(r => r.tokenId === l.tokenId),
           { attempts: 8, intervalMs: 1500 },
         );
-      } catch {}
+      } catch { /* indexer lag — the load() below still updates the UI */ }
       await load();
     } catch (e) { txError(id, e); }
   }
@@ -162,11 +166,11 @@ export function MarketplacePage({ wallet }: Props) {
               } ${RARITY_GLOW[rIdx] ? `shadow-lg ${RARITY_GLOW[rIdx]}` : ""}`}
             >
               <img
-                src={card.imageURI}
+                src={safeImageUrl(card.imageURI)}
                 alt={card.name}
                 loading="lazy"
                 className="w-full h-32 object-contain bg-gray-900 p-2"
-                onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/120?text=?"; }}
+                onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER_IMG; }}
               />
               <div className="p-3">
                 <div className="flex justify-between items-start mb-1">
@@ -247,7 +251,7 @@ async function fetchListingsFromChain(wallet: WalletState, filter: Rarity | "all
             createdAt:     "",
           },
         });
-      } catch {}
+      } catch { /* tokenId not listed / can't be read — skip it */ }
     }),
   );
   out.sort((a, b) => a.tokenId - b.tokenId);

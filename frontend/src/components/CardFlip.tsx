@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { RARITY_NAMES, RARITY_COLORS, RARITY_GLOW } from "../config/contracts";
+import { safeImageUrl, PLACEHOLDER_IMG } from "../lib/safeImageUrl";
 
 interface CardData {
   tokenId: bigint;
@@ -50,10 +51,10 @@ export function CardFlip({ card, revealed }: CardFlipProps) {
           style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
         >
           <img
-            src={card.imageURI}
+            src={safeImageUrl(card.imageURI)}
             alt={card.name}
             className="w-full h-32 object-contain bg-gray-800 p-1"
-            onError={(e) => { (e.target as HTMLImageElement).src = "https://via.placeholder.com/150?text=?"; }}
+            onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER_IMG; }}
           />
           <div className="p-2 flex-1 flex flex-col justify-between">
             <div>

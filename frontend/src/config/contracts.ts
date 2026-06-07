@@ -5,25 +5,39 @@
 
 const env = import.meta.env;
 
-function requireAddr(name: string): string {
-  const v = env[name];
-  if (!v || !/^0x[0-9a-fA-F]{40}$/.test(v)) {
-    throw new Error(
-      `${name} is not set or is not a valid address. ` +
-      `Copy frontend/.env.example to frontend/.env and fill in deployed addresses.`
-    );
-  }
-  return v;
-}
-
 export const CHAIN_ID = Number(env.VITE_CHAIN_ID ?? 11155111);
 
-export const ADDRESSES = {
-  PokemonCardNFT:  requireAddr("VITE_POKEMON_CARD_NFT_ADDRESS"),
-  PaymentSplitter: requireAddr("VITE_PAYMENT_SPLITTER_ADDRESS"),
-  GachaPack:       requireAddr("VITE_GACHA_PACK_ADDRESS"),
-  Marketplace:     requireAddr("VITE_MARKETPLACE_ADDRESS"),
+// An address is accepted as long as it has the right shape (0x + 40 hex chars).
+// We intentionally do NOT reject the all-zero address here: zero addresses are
+// used during local testing, so the app should still load with them instead of
+// blocking on the "not configured" screen.
+function isValidAddr(v: string | undefined): v is string {
+  return !!v && /^0x[0-9a-fA-F]{40}$/.test(v);
+}
+
+const RAW_ADDRESSES = {
+  PokemonCardNFT:  env.VITE_POKEMON_CARD_NFT_ADDRESS,
+  PaymentSplitter: env.VITE_PAYMENT_SPLITTER_ADDRESS,
+  GachaPack:       env.VITE_GACHA_PACK_ADDRESS,
+  Marketplace:     env.VITE_MARKETPLACE_ADDRESS,
 };
+
+// Names of .env vars that are missing or malformed. App reads this list to show
+// a friendly "not configured" screen instead of crashing (see App.tsx).
+export const MISSING_ADDRESS_VARS = (
+  [
+    ["PokemonCardNFT",  "VITE_POKEMON_CARD_NFT_ADDRESS"],
+    ["PaymentSplitter", "VITE_PAYMENT_SPLITTER_ADDRESS"],
+    ["GachaPack",       "VITE_GACHA_PACK_ADDRESS"],
+    ["Marketplace",     "VITE_MARKETPLACE_ADDRESS"],
+  ] as const
+)
+  .filter(([key]) => !isValidAddr(RAW_ADDRESSES[key]))
+  .map(([, envVar]) => envVar);
+
+export const CONFIG_OK = MISSING_ADDRESS_VARS.length === 0;
+
+export const ADDRESSES = RAW_ADDRESSES as Record<keyof typeof RAW_ADDRESSES, string>;
 
 // ─── ABIs (minimal — only functions called by the UI) ────────────────────────
 

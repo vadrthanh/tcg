@@ -11,7 +11,19 @@ export function Connect({ wallet }: Props) {
         Open card packs, trade NFTs, and earn royalties — all on Ethereum Sepolia.
       </p>
 
-      {!wallet.address ? (
+      {!wallet.hasProvider ? (
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-yellow-400">⚠ MetaMask not detected</p>
+          <a
+            href="https://metamask.io/download/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition"
+          >
+            Install MetaMask
+          </a>
+        </div>
+      ) : !wallet.address ? (
         <button
           onClick={wallet.connect}
           className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition"
