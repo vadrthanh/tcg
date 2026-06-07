@@ -42,7 +42,7 @@ export function Home({ wallet, go }: Props) {
     let mounted = true;
     api.nftsByOwner(wallet.address)
       .then(n => { if (mounted) setOwnedCardIds(n.map(x => x.cardId)); })
-      .catch(() => {});
+      .catch(() => { if (mounted) setOwnedCardIds([]); }); // clear on failure so a switched account never shows stale cards
     api.transactions({ address: wallet.address, type: "pack_opened", limit: 100 })
       .then(tx => { if (mounted) setPacksOpened(tx.length); })
       .catch(() => { if (mounted) setPacksOpened(null); });
