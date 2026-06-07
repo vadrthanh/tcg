@@ -116,6 +116,34 @@ async function saveLastBlock(block: number) {
 
 interface EvtCtx { txHash: string; blockNumber: number; logIndex: number; }
 
+// Contract numeric rarity (0..4) → DB string.
+const RARITY_NAMES = ["Common", "Uncommon", "Rare", "UltraRare", "Legendary"] as const;
+
+// A new card template was added to the pool (e.g. via the admin "Add Card" page).
+// The event only carries cardId/rarity/maxSupply, so we read the full template
+// on-chain and upsert it into the Card table — that's what the Collection page reads.
+async function handleCardAddedToPool(args: any, _ctx: EvtCtx) {
+  const cardId = Number(args.cardId);
+  const tpl = await _nft.getCardTemplate(cardId);
+  const rarity = RARITY_NAMES[Number(tpl.rarity)] ?? "Common";
+
+  await prisma.card.upsert({
+    where:  { id: cardId },
+    update: {
+      name: tpl.name, rarity, pokemonType: tpl.pokemonType, hp: Number(tpl.hp),
+      attack: tpl.attack, maxSupply: Number(tpl.maxSupply),
+      floorPrice: ethStr(BigInt(tpl.floorPrice)), imageURI: tpl.imageURI,
+    },
+    create: {
+      id: cardId, name: tpl.name, rarity, pokemonType: tpl.pokemonType, hp: Number(tpl.hp),
+      attack: tpl.attack, maxSupply: Number(tpl.maxSupply), currentSupply: Number(tpl.currentSupply),
+      floorPrice: ethStr(BigInt(tpl.floorPrice)), imageURI: tpl.imageURI,
+    },
+  });
+
+  console.log(`[indexer] CardAddedToPool #${cardId} ${tpl.name} (${rarity})`);
+}
+
 async function handlePackOpened(args: any, ctx: EvtCtx) {
   const buyer:     string   = lower(args.buyer);
   const tokenIds:  bigint[] = [...args.tokenIds].map(BigInt);
@@ -332,6 +360,8 @@ async function handleClaimed(args: any, ctx: EvtCtx) {
 // Block timestamp lookup with a tiny in-memory cache (catch-up scans the same blocks repeatedly).
 const blockTsCache = new Map<number, Date>();
 let _provider: Provider;
+// NFT contract handle — used by handleCardAddedToPool to read full templates.
+let _nft: any;
 async function blockTimestamp(blockNumber: number): Promise<Date> {
   const hit = blockTsCache.get(blockNumber);
   if (hit) return hit;
@@ -347,6 +377,7 @@ interface EventDef { name: string; contract: any; handler: (a: any, c: EvtCtx) =
 
 function eventDefs(c: ReturnType<typeof makeContracts>): EventDef[] {
   return [
+    { name: "CardAddedToPool",  contract: c.nft,         handler: handleCardAddedToPool },
     { name: "PackOpened",       contract: c.gacha,       handler: handlePackOpened },
     { name: "Listed",           contract: c.marketplace, handler: handleListed },
     { name: "Purchased",        contract: c.marketplace, handler: handlePurchased },
@@ -437,6 +468,7 @@ async function main() {
 
   _provider = makeProvider();
   const contracts = makeContracts(_provider);
+  _nft            = contracts.nft;
   const defs      = eventDefs(contracts);
 
   await catchUp(_provider, defs);

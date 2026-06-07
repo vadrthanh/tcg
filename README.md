@@ -3,7 +3,8 @@
 ![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity&logoColor=white)
 ![OpenZeppelin](https://img.shields.io/badge/OpenZeppelin-5.6-4E5EE4?logo=openzeppelin&logoColor=white)
 ![Hardhat](https://img.shields.io/badge/Hardhat-2.28-F7DF1E?logoColor=black)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![Network](https://img.shields.io/badge/Network-Sepolia-8247E5)
 
 > Buy packs, pull cards, trade them on-chain — all royalties enforced automatically.
@@ -26,8 +27,9 @@ This is the blockchain capstone project for IT4527E at university. It demonstrat
                     ┌──────────────────────────────────────────────────┐
                     │                   User Wallet                    │
                     └──────┬──────────────────┬───────────┬────────────┘
-                           │ openPack (ETH)   │ listCard  │ claim()
-                           ▼                  │ buyCard   ▼
+                           │ commit/reveal    │ listCard  │ claim()
+                           │ (ETH)            │ buyCard   │
+                           ▼                  │           ▼
                     ┌─────────────┐           │  ┌─────────────────────┐
                     │  GachaPack  │           │  │   PaymentSplitter   │
                     │  (gacha     │           │  │   (pull-payment     │
@@ -123,51 +125,105 @@ The invariant `platformFee + Σ royaltyAmts + sellerProceeds ≡ salePrice` is p
 |---|---|
 | Smart contracts | Solidity 0.8.24, OpenZeppelin Contracts 5.6 |
 | Compilation / testing | Hardhat 2.28 (Mocha/Chai), Foundry 1.7 (fuzz + invariant) |
-| Frontend | Vite 6, React 18, TypeScript, Tailwind CSS 3, ethers.js v6 |
+| Frontend | Vite 8, React 19, TypeScript, Tailwind CSS 3, ethers.js v6 |
+| Backend | Express, Prisma + SQLite, ethers v6 (event indexer + read-only API) |
 | Network | Ethereum Sepolia testnet |
 | NFT standard | ERC-721 (OpenZeppelin), EIP-2981 royalty standard |
 
+> **Why a backend?** All writes go straight to the chain from the browser wallet. The backend is a read replica: an **indexer** subscribes to contract events and writes them into SQLite, and a small **API** serves that data to the UI fast. If the API is down, the frontend falls back to reading directly from the chain — so the app still works without it.
+
 ---
 
-## Quick Start
+## Getting Started
+
+The project has three workspaces, each with its own `package.json` and `.env`:
+`contracts/` (Hardhat + Foundry), `backend/` (indexer + API), `frontend/` (Vite app).
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- A Sepolia RPC URL (Alchemy / Infura / public node) and a funded test wallet
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) (only if you want to run the fuzz/invariant tests)
+
+### 1. Clone & install
 
 ```bash
-# 1. Clone the repo
 git clone <repo-url> && cd TCG
 
-# 2. Install contract dependencies
-cd contracts && npm install
+cd contracts && npm install && cd ..
+cd backend   && npm install && cd ..
+cd frontend  && npm install && cd ..
+```
 
-# 3. Install frontend dependencies
-cd ../frontend && npm install && cd ../contracts
+### 2. Environment files
 
-# 4. Create environment file
-cp ../.env.example ../.env
-# Fill in SEPOLIA_RPC_URL, PRIVATE_KEY, ETHERSCAN_API_KEY
+```bash
+# Root — used by Hardhat (contracts): SEPOLIA_RPC_URL, PRIVATE_KEY, ETHERSCAN_API_KEY
+cp .env.example .env
 
-# 5. Compile contracts
-npm run compile
+# Backend — RPC URL, DB path, indexer + API settings
+cp backend/.env.example backend/.env
 
-# 6. Run Hardhat tests (112 tests)
-npm run test
+# Frontend — deployed contract addresses + API base URL
+cp frontend/.env.example frontend/.env
+```
 
-# 7. Run Foundry fuzz + invariant tests (17 tests, 1000 runs each)
-npm run test:fuzz
+The contracts are **already deployed to Sepolia** and `frontend/.env` ships with the live
+addresses, so you can run the app against the existing deployment without redeploying.
+If you deploy your own (see below), `scripts/deploy.ts` rewrites `frontend/.env` and
+`contracts/deploy/addresses.json` for you.
 
-# 8. Coverage report
-npm run coverage
+### 3. (Optional) Compile & test the contracts
 
-# 9. Gas report
-npm run gas
+```bash
+cd contracts
+npm run compile        # hardhat compile
+npm run test           # Hardhat unit + integration (Mocha/Chai)
+npm run test:fuzz      # Foundry fuzz + invariant (needs Foundry installed)
+npm run coverage       # coverage report
+npm run gas            # gas report (REPORT_GAS=true)
+```
 
-# 10. Run local Hardhat node (separate terminal)
-npx hardhat node
+---
 
-# 11. Deploy to local node
-npx hardhat run scripts/deploy.ts --network localhost
+## Run the app
 
-# 12. Start frontend dev server
-cd ../frontend && npm run dev
+The app runs as **three processes** (the backend is split into an API and an indexer).
+Start them in three terminals.
+
+```bash
+# ── Terminal 1 · Backend setup (run ONCE), then the API ──────────────────
+cd backend
+npm run setup          # copy ABIs + prisma generate + migrate + seed the 40-card DB
+npm run dev            # API on http://localhost:4000  (hot-reload)
+
+# ── Terminal 2 · Event indexer (backfills + follows Sepolia) ─────────────
+cd backend
+npm run dev:indexer    # writes on-chain events into SQLite
+
+# ── Terminal 3 · Frontend ────────────────────────────────────────────────
+cd frontend
+npm run dev            # app on http://localhost:5173
+```
+
+Open **http://localhost:5173**, connect a wallet (MetaMask / Rabby / OKX — a picker
+appears when more than one is installed), make sure it's on **Sepolia**, and open a pack.
+
+> `npm run setup` is only needed the first time (or after pulling new contract ABIs /
+> Prisma schema changes). On later runs just `npm run dev` + `npm run dev:indexer`.
+> Other useful backend scripts: `npm run seed` (re-seed the card table from
+> `pokemon-cards.json`), `npm run copy-abi` (refresh ABIs from `contracts/artifacts`),
+> `npm run prisma:studio` (browse the DB).
+
+### Local-only chain (optional)
+
+To run everything against a local Hardhat node instead of Sepolia:
+
+```bash
+cd contracts
+npx hardhat node                                          # Terminal A
+npx hardhat run scripts/deploy.ts --network localhost     # Terminal B (writes addresses)
+# then point backend/.env + frontend/.env at chainId 31337 and the local addresses
 ```
 
 ---
@@ -175,14 +231,11 @@ cd ../frontend && npm run dev
 ## Deploy to Sepolia
 
 ```bash
-# Ensure .env has SEPOLIA_RPC_URL and PRIVATE_KEY (funded with Sepolia ETH)
+# Ensure root .env has SEPOLIA_RPC_URL and PRIVATE_KEY (funded with Sepolia ETH)
 cd contracts
 
-# Deploy all 4 contracts and wire permissions
-npm run deploy:sepolia
-
-# Verify on Etherscan (requires ETHERSCAN_API_KEY)
-npm run verify:sepolia
+npm run deploy:sepolia   # deploy all 4 contracts + wire permissions + seed pool
+npm run verify:sepolia   # verify on Etherscan (requires ETHERSCAN_API_KEY)
 ```
 
 Deploy order: `PokemonCardNFT` → `PaymentSplitter` → `GachaPack` → `Marketplace`, then:
@@ -190,7 +243,20 @@ Deploy order: `PokemonCardNFT` → `PaymentSplitter` → `GachaPack` → `Market
 - Grant `DEPOSITOR_ROLE` to GachaPack and Marketplace on PaymentSplitter
 - Call `nft.batchAddCards(...)` to seed all 40 cards from `data/pokemon-cards.json`
 
-Deployed addresses are saved to `contracts/deploy/addresses.json` which the frontend reads automatically.
+The script writes the new addresses to `contracts/deploy/addresses.json` **and** updates
+`frontend/.env`. After deploying, point `backend/.env` at the new addresses (or its
+`DEPLOY_BLOCK`) and re-run `npm run setup` so the indexer starts from the right block.
+
+### Adding a card after deploy
+
+Card templates are write-once on-chain. To add one without redeploying:
+
+- **In the app** — connect the deployer wallet; an **"Add Card"** tab appears (gated on
+  `POOL_MANAGER_ROLE`). Fill the form; the indexer picks up `CardAddedToPool` and the card
+  shows in Collection within a poll.
+- **From the CLI** — append it to `contracts/data/pokemon-cards.json`, then
+  `cd contracts && npx hardhat run scripts/add-card.ts --network sepolia`
+  (adds any card in the JSON not already in the pool).
 
 ---
 
@@ -198,7 +264,7 @@ Deployed addresses are saved to `contracts/deploy/addresses.json` which the fron
 
 ```
 TCG/
-├── .env.example                    # Required secrets template
+├── .env.example                    # Root secrets template (Hardhat)
 ├── .gitignore
 ├── BUILD_LOG.md                    # Phase-by-phase build log
 ├── README.md
@@ -206,8 +272,8 @@ TCG/
 │   ├── data/
 │   │   └── pokemon-cards.json      # 40 Gen-I card templates (supply, rarity, imageURI)
 │   ├── src/
-│   │   ├── PokemonCardNFT.sol      # ERC-721 + EIP-2981, 40-card on-chain pool
-│   │   ├── GachaPack.sol           # Gacha engine — weighted draw, inventory falldown
+│   │   ├── PokemonCardNFT.sol      # ERC-721 + EIP-2981, on-chain card pool
+│   │   ├── GachaPack.sol           # Gacha engine — commit-reveal draw, inventory falldown
 │   │   ├── Marketplace.sol         # Atomic swap, royalty routing, price hints
 │   │   ├── PaymentSplitter.sol     # Pull-payment vault (CEI + ReentrancyGuard)
 │   │   └── test/                   # ReentrancyAttacker, MarketplaceAttacker helpers
@@ -216,16 +282,31 @@ TCG/
 │   │   └── foundry/                # Fuzz, invariant, statistical tests
 │   ├── scripts/
 │   │   ├── deploy.ts               # Full deploy + role wiring + pool seeding
-│   │   └── verify.ts               # Etherscan verification
-│   ├── gas-report.txt              # forge snapshot output
+│   │   ├── verify.ts               # Etherscan verification
+│   │   ├── add-card.ts             # Add new card template(s) to the live pool
+│   │   ├── check-balance.ts        # Deployer balance helper
+│   │   └── smoke-test.ts           # Post-deploy sanity checks
+│   ├── deploy/addresses.json       # Written by deploy.ts (frontend/backend read this)
 │   ├── hardhat.config.ts           # Solidity 0.8.24, optimizer 200, EVM cancun
 │   ├── foundry.toml                # Shares src/ with Hardhat, 1000 fuzz runs
 │   └── package.json
+├── backend/                        # Event indexer + read-only API
+│   ├── prisma/schema.prisma        # SQLite schema (Card, MintedNFT, Listing, …)
+│   ├── abi/                        # ABIs copied from contracts/artifacts (copy-abi)
+│   ├── src/
+│   │   ├── index.ts                # Express API (all GET endpoints)
+│   │   ├── indexer.ts              # Sepolia event indexer → SQLite
+│   │   ├── routes/                 # cards, nfts, listings, transactions, stats, health
+│   │   └── lib/                    # db, contracts, abis, addresses, seed, copy-abi
+│   └── package.json
 └── frontend/
     ├── src/
-    │   ├── pages/                  # Connect, Gacha, Inventory, Marketplace, Royalty
-    │   ├── components/             # CardFlip, Toast, WalletButton
-    │   └── config/                 # Typed ABIs + deployed addresses
+    │   ├── pages/                  # Home, Gacha, Collection, Inventory, Marketplace,
+    │   │                           #   RoyaltyDashboard, AdminAddCard (deployer-only)
+    │   ├── components/             # CreatureCard, CardModal, WalletPicker, TxToast, ui/
+    │   ├── hooks/useWallet.ts      # EIP-6963 multi-wallet connect + chain guard
+    │   ├── lib/                    # api client, eip6963, tokens, types, formatters
+    │   └── config/contracts.ts     # Typed ABIs + addresses (from VITE_* env)
     ├── tailwind.config.js
     ├── vite.config.ts
     └── package.json
@@ -235,13 +316,14 @@ TCG/
 
 ## Team
 
-| Member | Role | Deliverables |
-|---|---|---|
-| Person 1 | Smart Contract Lead | PokemonCardNFT.sol, EIP-2981 design, card pool system |
-| Person 2 | DeFi / Security | PaymentSplitter.sol, Marketplace.sol, reentrancy audits |
-| Person 3 | Gacha Engine | GachaPack.sol, randomness design, statistical tests (Foundry) |
-| Person 4 | Frontend | Vite/React app, MetaMask integration, card-flip animation |
-| Person 5 | DevOps / Docs | Hardhat scripts, Sepolia deploy, Etherscan verify, README |
+| Member | Role | Owns | Key deliverables |
+|---|---|---|---|
+| **Hieu** | NFT & Gacha Contracts | `PokemonCardNFT.sol`, `GachaPack.sol` | ERC-721 + multi-receiver EIP-2981 royalties, on-chain card pool & supply tracking, commit-reveal weighted gacha with falldown, Foundry statistical/gacha tests |
+| **Thanh** | Marketplace & Payments / Security | `Marketplace.sol`, `PaymentSplitter.sol` | Atomic NFT-for-ETH swap, royalty + platform-fee routing, pull-payment vault (CEI + ReentrancyGuard), reentrancy & value-conservation fuzz/invariant tests, security audit |
+| **Hung** | Backend & DevOps | `backend/`, `contracts/scripts/` | Express read API + Prisma/SQLite, Sepolia event indexer (incl. `CardAddedToPool`), deploy / verify / `add-card` scripts, Hardhat + Foundry test wiring, README & setup docs |
+| **Nam** | Frontend | `frontend/` | Vite/React app, EIP-6963 multi-wallet connect (MetaMask/Rabby/OKX), gacha reveal animation, Marketplace / Inventory / Royalty pages, deployer-only Add-Card admin page |
+
+**Shared / cross-cutting:** deploy order & role wiring (Hieu ↔ Thanh ↔ Hung), ABI sync between contracts → backend → frontend (Hung ↔ Nam), and the end-to-end integration test — open pack → list → buy → claim — is co-owned by all four.
 
 ---
 

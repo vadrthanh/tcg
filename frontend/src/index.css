@@ -2,20 +2,119 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   Pokédesk — design tokens & base
+   Minimal · gamified · premium dark
+   ============================================================ */
+
 :root {
   color-scheme: dark;
-  background: #0f0f13;
-  color: #e5e7eb;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+
+  /* surfaces */
+  --bg:        oklch(0.155 0.018 268);
+  --bg-2:      oklch(0.185 0.020 268);
+  --surface:   oklch(0.205 0.021 268);
+  --surface-2: oklch(0.245 0.024 268);
+  --surface-3: oklch(0.285 0.026 268);
+  --line:      oklch(1 0 0 / 0.07);
+  --line-2:    oklch(1 0 0 / 0.12);
+
+  /* text */
+  --text:      oklch(0.975 0.004 268);
+  --text-dim:  oklch(0.74 0.012 268);
+  --text-faint:oklch(0.55 0.014 268);
+
+  /* accent (primary) — soft/line/text derive from --accent so it's tweakable */
+  --accent:      oklch(0.64 0.205 285);
+  --accent-soft: color-mix(in oklch, var(--accent) 16%, transparent);
+  --accent-line: color-mix(in oklch, var(--accent) 45%, transparent);
+  --accent-text: color-mix(in oklch, var(--accent) 60%, white 32%);
+
+  /* rarity */
+  --r-legendary: oklch(0.82 0.155 85);
+  --r-ultra:     oklch(0.68 0.215 305);
+  --r-rare:      oklch(0.70 0.155 245);
+  --r-uncommon:  oklch(0.76 0.155 158);
+  --r-common:    oklch(0.72 0.012 268);
+
+  /* type colors */
+  --t-fire:     oklch(0.68 0.20 40);
+  --t-water:    oklch(0.68 0.145 235);
+  --t-electric: oklch(0.84 0.16 96);
+  --t-grass:    oklch(0.74 0.155 150);
+  --t-psychic:  oklch(0.70 0.18 330);
+  --t-dragon:   oklch(0.64 0.16 286);
+  --t-ice:      oklch(0.82 0.10 212);
+  --t-fight:    oklch(0.64 0.18 30);
+
+  /* radii */
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-pill: 999px;
+
+  /* shadow */
+  --shadow-card: 0 1px 0 oklch(1 0 0 / 0.04) inset, 0 12px 30px -18px oklch(0 0 0 / 0.8);
+  --shadow-pop:  0 30px 70px -30px oklch(0 0 0 / 0.85);
+
+  --fs: 'Space Grotesk', system-ui, sans-serif;
+  --fb: 'DM Sans', system-ui, sans-serif;
+  --fm: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-body {
+* { box-sizing: border-box; }
+
+html, body {
   margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--fb);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-#root {
-  min-height: 100vh;
+/* ambient backdrop glow */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(800px 500px at 12% -8%, oklch(0.64 0.205 285 / 0.13), transparent 60%),
+    radial-gradient(700px 480px at 100% 0%, oklch(0.68 0.215 305 / 0.09), transparent 55%);
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; min-height: 100vh; }
+
+h1, h2, h3, h4 { font-family: var(--fs); margin: 0; letter-spacing: -0.02em; }
+button { font-family: inherit; cursor: pointer; }
+.mono { font-family: var(--fm); font-feature-settings: 'tnum' 1; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+::selection { background: var(--accent-soft); }
+
+/* scrollbar */
+*::-webkit-scrollbar { width: 11px; height: 11px; }
+*::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--surface-2); background-clip: padding-box; border: 3px solid transparent; }
+
+/* utility */
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.gap-4 { gap: 4px; } .gap-8 { gap: 8px; } .gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; } .gap-24 { gap: 24px; }
+.dim { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.spacer { flex: 1; }
+
+@keyframes floatUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: none; } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes pulseGlow { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+@keyframes flameWobble { 0%,100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(6deg) scale(1.08); } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
