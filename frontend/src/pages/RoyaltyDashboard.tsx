@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Contract, formatEther } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import { ADDRESSES, SPLITTER_ABI } from "../config/contracts";
+import { assertChain } from "../lib/assertChain";
 import { PageHead } from "../components/PageHead";
 import { NotConnected } from "../components/NotConnected";
 import { Btn } from "../components/ui/Btn";
@@ -34,6 +35,7 @@ export function RoyaltyDashboard({ wallet }: Props) {
     setLoading(true);
     const id = txPending("Claiming balance…");
     try {
+      await assertChain(wallet.provider);
       const tx = await splitter.claim();
       await tx.wait();
       txSuccess(id, "Claimed!");

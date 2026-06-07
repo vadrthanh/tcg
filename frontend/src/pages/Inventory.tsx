@@ -8,8 +8,10 @@ import { Contract, parseEther, formatEther } from "ethers";
 import type { WalletState } from "../hooks/useWallet";
 import type { Page } from "../App";
 import type { MintedNFTRow, Rarity } from "../lib/types";
+import toast from "react-hot-toast";
 import { ADDRESSES, NFT_ABI, MARKET_ABI } from "../config/contracts";
 import { api, ApiUnavailableError, pollUntil } from "../lib/api";
+import { assertChain } from "../lib/assertChain";
 import { RARITY_BY_INDEX } from "../lib/tokens";
 import { PageHead } from "../components/PageHead";
 import { NotConnected } from "../components/NotConnected";
@@ -19,6 +21,21 @@ import { Icon } from "../components/ui/Icon";
 import { txPending, txSuccess, txError } from "../components/TxToast";
 
 interface Props { wallet: WalletState; go: (p: Page) => void; }
+
+// Validate the user-entered list price before parseEther: non-empty, numeric,
+// > 0, and at most 18 decimals (the wei limit). parseEther("-1") silently yields
+// a negative bigint, so a bad value must be caught here. Returns an error
+// message, or null when the price is valid.
+function validatePrice(input: string): string | null {
+  const t = input.trim();
+  if (!t) return "Enter a price";
+  const n = Number(t);
+  if (!Number.isFinite(n)) return "Invalid price";
+  if (n <= 0) return "Price must be greater than 0";
+  const decimals = t.includes(".") ? t.split(".")[1].length : 0;
+  if (decimals > 18) return "At most 18 decimal places";
+  return null;
+}
 
 export function Inventory({ wallet, go }: Props) {
   const [nfts, setNfts]           = useState<MintedNFTRow[]>([]);
@@ -100,12 +117,15 @@ function InventoryTile({ nft, isListed, wallet, onListed }: {
   const suggest = card.floorPrice;
 
   async function listForSale() {
-    if (!wallet.signer || !price) return;
+    if (!wallet.signer) return;
+    const priceErr = validatePrice(price);
+    if (priceErr) { toast.error(priceErr); return; }
     const nftC    = new Contract(ADDRESSES.PokemonCardNFT, NFT_ABI,    wallet.signer);
     const marketC = new Contract(ADDRESSES.Marketplace,    MARKET_ABI, wallet.signer);
     let toastId = txPending("Approving marketplace…");
     setBusy(true);
     try {
+      await assertChain(wallet.provider);
       const isApprovedAll = await nftC.isApprovedForAll(wallet.signer.address, ADDRESSES.Marketplace);
       if (!isApprovedAll) { const ap = await nftC.setApprovalForAll(ADDRESSES.Marketplace, true); await ap.wait(); }
       txSuccess(toastId, "Approved");
