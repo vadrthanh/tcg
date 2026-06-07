@@ -186,8 +186,16 @@ available-ids and pool-status views.
 | Event | Trigger | Indexed |
 |---|---|---|
 | `CardMinted(address to, uint256 tokenId, Rarity rarity)` | every mint | `to`, `tokenId` |
-| `RoyaltyReceiversSet(uint256 tokenId, RoyaltyReceiver[] receivers)` | every mint | `tokenId` |
+| `RoyaltyReceiversSet(uint256 tokenId, RoyaltyReceiver[] receivers)` | **freeform `mintCard` only** | `tokenId` |
 | `CardAddedToPool(uint16 cardId, Rarity rarity, uint16 maxSupply)` | `addCardToPool` / `batchAddCards` | `cardId` |
+
+> **Pool/gacha mints do not emit `RoyaltyReceiversSet`.** To save gas, a
+> template-based `mintCard(to, cardId)` stores only the `tokenId → cardId` link
+> and derives royalties from the pool template on read. The receivers were
+> already announced once via `CardAddedToPool` and are queryable per token via
+> `getRoyaltyReceivers(tokenId)` / EIP-2981 `royaltyInfo(tokenId, salePrice)` —
+> the standard, view-based discovery path. The event still fires for **freeform**
+> mints, which carry per-token royalty data with no template behind it.
 
 The standard `Transfer`, `Approval`, `ApprovalForAll`, `RoleGranted`,
 `RoleRevoked`, `OwnershipTransferred` events also fire (inherited).
