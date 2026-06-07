@@ -1,7 +1,6 @@
 import { RARITY, typeColor, vars } from "../../lib/tokens";
+import { safeImageUrl, PLACEHOLDER_IMG } from "../../lib/safeImageUrl";
 import type { CardRow } from "../../lib/types";
-
-const FALLBACK = "https://via.placeholder.com/150?text=?";
 
 type ArtCard = Pick<CardRow, "name" | "rarity" | "pokemonType" | "imageURI">;
 
@@ -13,12 +12,13 @@ export function CardArt({ card, size = "md", revealing }: { card: ArtCard; size?
       <div className="art-glow" />
       {card.imageURI && (
         <img
-          src={card.imageURI}
+          src={safeImageUrl(card.imageURI)}
           alt={card.name}
           loading="lazy"
           onError={(e) => {
             const img = e.target as HTMLImageElement;
-            if (img.src !== FALLBACK) img.src = FALLBACK; // guard: don't re-trigger if FALLBACK itself fails
+            // guard: don't re-trigger onError once we're already on the placeholder
+            if (!img.src.endsWith(PLACEHOLDER_IMG)) img.src = PLACEHOLDER_IMG;
           }}
         />
       )}
