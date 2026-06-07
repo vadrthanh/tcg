@@ -29,6 +29,9 @@ interface Props { wallet: WalletState; go: (p: Page) => void; }
 function validatePrice(input: string): string | null {
   const t = input.trim();
   if (!t) return "Enter a price";
+  // Canonical decimal only — reject scientific notation ("1e-3"), signs, etc.
+  // which pass Number() but throw later at parseEther.
+  if (!/^\d*\.?\d+$/.test(t)) return "Enter a plain decimal amount";
   const n = Number(t);
   if (!Number.isFinite(n)) return "Invalid price";
   if (n <= 0) return "Price must be greater than 0";
