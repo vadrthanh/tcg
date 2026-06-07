@@ -4,11 +4,8 @@
 
 language: en-US
 early_access: false
-tone_instructions: >
-  This is a university blockchain capstone. Be precise and educational: when you
-  flag an issue, briefly explain the underlying smart-contract or web3 security
-  principle so the author learns from it. Prioritize correctness and security
-  (reentrancy, access control, integer safety, fund accounting) over style nits.
+# Must be <= 250 characters (CodeRabbit schema limit).
+tone_instructions: "University blockchain capstone. Be precise and educational: when flagging an issue, briefly explain the web3/smart-contract security principle behind it. Prioritize correctness and security (reentrancy, access control, fund accounting) over style."
 
 reviews:
   profile: assertive
