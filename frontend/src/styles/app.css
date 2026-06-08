@@ -47,9 +47,12 @@
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: 6px; animation: floatUp .16s both; }
 .wallet-menu-addr { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 12px 10px; font-size: 13px; color: var(--text-dim); }
-.wallet-menu-mini { width: 30px; height: 30px; flex: none; border-radius: 8px; display: grid; place-items: center;
-  background: var(--surface-3); border: 1px solid var(--line); color: var(--text-dim); transition: color .14s; }
+  padding: 2px 12px 4px; font-size: 13px; color: var(--text-dim); }
+/* 44px touch target, but the icon is right-anchored (place-items: center end) so
+   its right edge sits at the row's 12px inset — mirroring the left-column icons —
+   instead of floating in the middle of the hit box. The hit area extends left. */
+.wallet-menu-mini { width: 44px; height: 44px; flex: none; display: grid; place-items: center end;
+  background: transparent; border: none; color: var(--text-dim); transition: color .14s; }
 .wallet-menu-mini:hover { color: var(--text); }
 .wallet-menu-sep { height: 1px; background: var(--line); margin: 6px 12px; }
 .wallet-menu-item { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 0 12px;
