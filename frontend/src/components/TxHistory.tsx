@@ -18,6 +18,12 @@ const TYPE_LABEL: Record<TxType, { label: string; color: string; icon: string }>
 // gives phrases like "yesterday"; older than a week falls back to an absolute
 // date. Computed at render (a snapshot — the list refetches on mount).
 const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+/**
+ * Formats an ISO timestamp as a human-friendly relative time string.
+ *
+ * @param iso - An ISO 8601 timestamp or other string accepted by `Date` parsing.
+ * @returns An empty string if `iso` is invalid; `"just now"` for differences under 60 seconds; a localized relative time for minutes, hours, or days (e.g. `"5 minutes ago"`, `"in 2 hours"`); for differences of seven days or more, an absolute locale date string.
+ */
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -32,6 +38,16 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+/**
+ * Render a transaction activity list for a given address.
+ *
+ * Fetches up to `limit` transactions for `address` and displays each entry with
+ * an icon, label, token/token-count, optional ETH value, and a relative timestamp.
+ *
+ * @param address - The address whose transactions to display; when `null` nothing is rendered.
+ * @param limit - Maximum number of transactions to fetch and display (default: 20).
+ * @returns A React element containing the transaction list, or `null` if `address` is `null`.
+ */
 export function TxHistory({ address, limit = 20 }: { address: string | null; limit?: number }) {
   const [rows, setRows]       = useState<TransactionRow[]>([]);
   const [loading, setLoading] = useState(false);
