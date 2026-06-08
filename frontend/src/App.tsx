@@ -7,6 +7,7 @@ import { Icon, type IconName } from "./components/ui/Icon";
 import { Btn } from "./components/ui/Btn";
 import { CardModal } from "./components/CardModal";
 import { WalletPicker } from "./components/WalletPicker";
+import { WalletMenu } from "./components/WalletMenu";
 import type { CardRow } from "./lib/types";
 import { Home } from "./pages/Home";
 import { Gacha } from "./pages/Gacha";
@@ -69,7 +70,6 @@ export default function App() {
 
   function go(p: Page) { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function openModal(card: CardRow, owned = false) { setModal({ card, owned }); }
-  const short = wallet.address ? `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}` : "";
 
   return (
     <div className="app">
@@ -97,10 +97,7 @@ export default function App() {
             ) : !wallet.chainOk ? (
               <Btn kind="outline" size="sm" onClick={wallet.switchToSepolia}>Switch to Sepolia</Btn>
             ) : (
-              <div className="wallet-pill">
-                {balance != null && <span className="wallet-bal mono">◇ {balance}</span>}
-                <span className="wallet-addr mono">{short}</span>
-              </div>
+              <WalletMenu address={wallet.address} balance={balance} onDisconnect={wallet.disconnect} />
             )}
           </div>
         </div>
