@@ -81,7 +81,6 @@ export function Home({ wallet, go }: Props) {
             <Btn kind="primary" size="lg" icon="bolt" onClick={() => go("gacha")}>Open a pack</Btn>
             <Btn kind="ghost" size="lg" icon="grid" onClick={() => go("collection")}>Browse set</Btn>
           </div>
-          {wallet.error && <p className="faint" style={{ color: "#f87171", marginTop: 14, fontSize: 13 }}>{wallet.error}</p>}
         </div>
       </div>
 

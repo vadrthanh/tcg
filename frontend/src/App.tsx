@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Contract, formatEther } from "ethers";
-import { Toaster } from "react-hot-toast";
+import { Toaster, toast } from "react-hot-toast";
 import { useWallet } from "./hooks/useWallet";
 import { ADDRESSES, NFT_ABI } from "./config/contracts";
 import { Icon, type IconName } from "./components/ui/Icon";
@@ -63,6 +63,20 @@ export default function App() {
       .catch(() => { if (live) setBalance(null); });
     return () => { live = false; };
   }, [wallet.provider, wallet.address]);
+
+  // Surface wallet connect / network errors (e.g. "no wallet detected") as a toast
+  // so the failure is visible from any page. connect() resets error to null before
+  // each attempt, so repeat clicks re-fire this; the fixed id replaces rather than
+  // stacks. Previously only Home rendered wallet.error, so a failed Connect from the
+  // topbar or any other page gave no feedback.
+  useEffect(() => {
+    if (wallet.error) {
+      toast.error(wallet.error, {
+        id: "wallet-error",
+        style: { background: "var(--surface-2)", color: "#f87171", border: "1px solid var(--line-2)" },
+      });
+    }
+  }, [wallet.error]);
 
   // If the admin tab is open and the wallet loses the role (disconnect / switch
   // account), fall back to Home so the gated page can't linger.
