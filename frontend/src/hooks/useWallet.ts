@@ -6,6 +6,11 @@ import { discoverWallets, type Eip1193, type DiscoveredWallet } from "../lib/eip
 // Remember which wallet the user picked so the next page load reconnects to the
 // same one (silently, no popup) instead of guessing.
 const LAST_WALLET_KEY = "tcg:wallet-rdns";
+// Set when the user explicitly disconnects. The mount effect honours it to
+// suppress the silent auto-reconnect — otherwise a lone installed wallet would
+// reconnect on every reload (the `found.length === 1` fallback ignores
+// LAST_WALLET_KEY). Cleared on the next explicit connect.
+const DISCONNECTED_KEY = "tcg:wallet-disconnected";
 
 export interface WalletState {
   provider: BrowserProvider | null;
@@ -14,6 +19,7 @@ export interface WalletState {
   chainOk: boolean;
   error: string | null;
   connect: () => Promise<void>;
+  disconnect: () => void;
   switchToSepolia: () => Promise<void>;
   // ── Multi-wallet picker ──────────────────────────────────────────────────
   wallets: DiscoveredWallet[];   // wallets discovered via EIP-6963
@@ -24,6 +30,10 @@ export interface WalletState {
 
 function readLastWallet(): string | null {
   try { return localStorage.getItem(LAST_WALLET_KEY); } catch { return null; }
+}
+
+function readDisconnected(): boolean {
+  try { return localStorage.getItem(DISCONNECTED_KEY) === "1"; } catch { return false; }
 }
 
 export function useWallet(): WalletState {
@@ -65,26 +75,35 @@ export function useWallet(): WalletState {
     setChainOk(Number(net.chainId) === CHAIN_ID);
   }, []);
 
+  // Detach any account/chain listeners currently attached.
+  const detachListeners = useCallback(() => {
+    if (listeners.current) {
+      listeners.current.eth.removeListener("accountsChanged", listeners.current.handler);
+      listeners.current.eth.removeListener("chainChanged", listeners.current.handler);
+      listeners.current = null;
+    }
+  }, []);
+
   // Attach account/chain listeners to a wallet, detaching any previous ones first.
   // Without these, switching account or network in the wallet after connecting
   // would leave the app showing and signing with the OLD account/chain.
   const attachListeners = useCallback((eth: Eip1193) => {
-    if (listeners.current) {
-      listeners.current.eth.removeListener("accountsChanged", listeners.current.handler);
-      listeners.current.eth.removeListener("chainChanged", listeners.current.handler);
-    }
+    detachListeners();
     const handler = () => { refresh().catch(() => {}); };
     eth.on("accountsChanged", handler);
     eth.on("chainChanged", handler);
     listeners.current = { eth, handler };
-  }, [refresh]);
+  }, [detachListeners, refresh]);
 
   // Connect to a specific discovered wallet — opens that wallet's permission popup.
   const connectTo = useCallback(async (w: DiscoveredWallet) => {
     injected.current = w.provider;
     const p = new BrowserProvider(w.provider);
     await p.send("eth_requestAccounts", []); // opens the wallet permission popup
-    try { localStorage.setItem(LAST_WALLET_KEY, w.info.rdns); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(LAST_WALLET_KEY, w.info.rdns);
+      localStorage.removeItem(DISCONNECTED_KEY); // explicit connect re-enables auto-reconnect
+    } catch { /* ignore */ }
     attachListeners(w.provider);
     await refresh();
   }, [attachListeners, refresh]);
@@ -97,6 +116,23 @@ export function useWallet(): WalletState {
   }, [connectTo]);
 
   const closePicker = useCallback(() => setPickerOpen(false), []);
+
+  // Soft disconnect: forget the wallet app-side and stop the silent reconnect on
+  // next load. MetaMask keeps the dapp approved, so a later connect() needs no
+  // popup. No EIP-1193 "disconnect" exists — clearing our own state is the pattern.
+  const disconnect = useCallback(() => {
+    setError(null);
+    detachListeners();
+    injected.current = null;
+    setProvider(null);
+    setSigner(null);
+    setAddress(null);
+    setChainOk(false);
+    try {
+      localStorage.removeItem(LAST_WALLET_KEY);
+      localStorage.setItem(DISCONNECTED_KEY, "1"); // suppress silent auto-reconnect on next load
+    } catch { /* ignore */ }
+  }, [detachListeners]);
 
   const connect = useCallback(async () => {
     setError(null);
@@ -146,6 +182,7 @@ export function useWallet(): WalletState {
     discoverWallets().then(found => {
       if (cancelled) return;
       setWallets(found);
+      if (readDisconnected()) return; // user disconnected — don't silently reconnect
       const lastRdns = readLastWallet();
       const remembered = lastRdns ? found.find(w => w.info.rdns === lastRdns) : undefined;
       const target = remembered ?? (found.length === 1 ? found[0] : undefined);
@@ -157,16 +194,12 @@ export function useWallet(): WalletState {
 
     return () => {
       cancelled = true;
-      if (listeners.current) {
-        listeners.current.eth.removeListener("accountsChanged", listeners.current.handler);
-        listeners.current.eth.removeListener("chainChanged", listeners.current.handler);
-        listeners.current = null;
-      }
+      detachListeners();
     };
-  }, [attachListeners, refresh]);
+  }, [attachListeners, detachListeners, refresh]);
 
   return {
-    provider, signer, address, chainOk, error, connect, switchToSepolia,
+    provider, signer, address, chainOk, error, connect, disconnect, switchToSepolia,
     wallets, pickerOpen, selectWallet, closePicker,
   };
 }

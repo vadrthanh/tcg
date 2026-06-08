@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 export type IconName =
   | "home" | "bolt" | "grid" | "cards" | "store" | "coin" | "wallet" | "flame"
-  | "spark" | "check" | "lock" | "arrow" | "refresh" | "plus" | "tag" | "trophy" | "chart";
+  | "spark" | "check" | "lock" | "arrow" | "refresh" | "plus" | "tag" | "trophy" | "chart"
+  | "copy" | "external" | "power" | "chevron";
 
 const PATHS: Record<IconName, ReactNode> = {
   home:   <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></>,
@@ -22,6 +23,10 @@ const PATHS: Record<IconName, ReactNode> = {
   tag:    <><path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9-9-9Z" /><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" /></>,
   trophy: <><path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" /><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3M9 18h6M10 21h4M12 13v5" /></>,
   chart:  <><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 16v-4M12 16V8m4 8v-6" /></>,
+  copy:   <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2" /></>,
+  external:<><path d="M14 4h6v6" /><path d="M20 4 11 13" /><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" /></>,
+  power:  <><path d="M12 3v9" /><path d="M7.6 6.6a7 7 0 1 0 8.8 0" /></>,
+  chevron:<path d="m6 9 6 6 6-6" />,
 };
 
 export function Icon({ name, size = 18, stroke = 1.8 }: { name: IconName; size?: number; stroke?: number }) {
