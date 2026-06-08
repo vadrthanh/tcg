@@ -28,13 +28,39 @@
 .navi.active svg { color: var(--accent-text); }
 
 .topbar-r { display: flex; align-items: center; gap: 12px; justify-self: end; }
-.wallet-pill { display: flex; align-items: center; gap: 9px; padding: 7px 13px; border-radius: var(--r-pill);
-  background: var(--surface); border: 1px solid var(--line); white-space: nowrap; }
+/* connected-wallet pill — opens the wallet menu */
+.wallet-menu-wrap { position: relative; }
+.wallet-trigger { display: flex; align-items: center; gap: 9px; padding: 7px 13px; border-radius: var(--r-pill);
+  background: var(--surface); border: 1px solid var(--line); white-space: nowrap; color: var(--text);
+  cursor: pointer; transition: background .15s, border-color .15s; }
+.wallet-trigger:hover { background: var(--surface-2); border-color: var(--accent); }
 .wallet-bal { font-size: 13px; color: var(--accent-text); font-weight: 600; display: inline-flex; align-items: center; }
 .wallet-bal::after { content: ''; display: block; width: 1px; height: 15px; background: var(--line); margin-left: 9px; }
 .wallet-addr { font-size: 12.5px; color: var(--text-dim); display: flex; align-items: center; gap: 7px; }
 .wallet-addr::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%;
   background: var(--r-uncommon); box-shadow: 0 0 8px var(--r-uncommon); }
+.wallet-caret { display: inline-flex; color: var(--text-faint); transition: transform .2s ease; }
+.wallet-caret.up { transform: rotate(180deg); }
+
+/* wallet dropdown menu */
+.wallet-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 232px; z-index: 20;
+  background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop); padding: 6px; animation: floatUp .16s both; }
+.wallet-menu-addr { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 2px 12px 4px; font-size: 13px; color: var(--text-dim); }
+/* 44px touch target, but the icon is right-anchored (place-items: center end) so
+   its right edge sits at the row's 12px inset — mirroring the left-column icons —
+   instead of floating in the middle of the hit box. The hit area extends left. */
+.wallet-menu-mini { width: 44px; height: 44px; flex: none; display: grid; place-items: center end;
+  background: transparent; border: none; color: var(--text-dim); transition: color .14s; }
+.wallet-menu-mini:hover { color: var(--text); }
+.wallet-menu-sep { height: 1px; background: var(--line); margin: 6px 12px; }
+.wallet-menu-item { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 0 12px;
+  border-radius: 10px; background: transparent; border: none; color: var(--text); text-decoration: none;
+  font-family: var(--fs); font-weight: 600; font-size: 14px; cursor: pointer; transition: background .14s, color .14s; }
+.wallet-menu-item:hover { background: var(--surface-3); }
+.wallet-menu-danger { color: oklch(0.72 0.19 25); }
+.wallet-menu-danger:hover { background: oklch(0.55 0.2 25 / 0.16); color: oklch(0.78 0.19 25); }
 
 /* condense topbar at mid widths: collapse nav to icon-only */
 @media (max-width: 1080px) {
@@ -51,7 +77,7 @@
 @media (max-width: 760px) {
   .nav { display: none; }
   .topbar-in { gap: 12px; }
-  .wallet-pill { padding: 7px 11px; }
+  .wallet-trigger { padding: 7px 11px; }
   .wallet-addr { display: none; }
   .content { padding: 22px 16px 90px; }
   .nav-mobile { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
