@@ -13,6 +13,25 @@ const TYPE_LABEL: Record<TxType, { label: string; color: string; icon: string }>
   card_cancelled: { label: "Cancelled",   color: "var(--text-faint)",   icon: "✕" },
 };
 
+// Idiomatic "5 minutes ago" / "yesterday" for the recent-activity feed — a bare
+// date hid the time, so everything from today looked identical. numeric:"auto"
+// gives phrases like "yesterday"; older than a week falls back to an absolute
+// date. Computed at render (a snapshot — the list refetches on mount).
+const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const sec = Math.round((then - Date.now()) / 1000); // negative = past
+  if (Math.abs(sec) < 60) return "just now";
+  const min = Math.round(sec / 60);
+  if (Math.abs(min) < 60) return rtf.format(min, "minute");
+  const hr = Math.round(min / 60);
+  if (Math.abs(hr) < 24) return rtf.format(hr, "hour");
+  const day = Math.round(hr / 24);
+  if (Math.abs(day) < 7) return rtf.format(day, "day");
+  return new Date(iso).toLocaleDateString();
+}
+
 export function TxHistory({ address, limit = 20 }: { address: string | null; limit?: number }) {
   const [rows, setRows]       = useState<TransactionRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,7 +60,7 @@ export function TxHistory({ address, limit = 20 }: { address: string | null; lim
     <ul className="col gap-8" style={{ listStyle: "none", margin: 0, padding: 0 }}>
       {rows.map(r => {
         const meta = TYPE_LABEL[r.type];
-        const when = new Date(r.timestamp).toLocaleDateString();
+        const when = relativeTime(r.timestamp);
         return (
           <li key={`${r.txHash}-${r.logIndex}`} className="row gap-8" style={{ fontSize: 12.5 }}>
             <span style={{ color: meta.color }}>{meta.icon}</span>
@@ -50,7 +69,8 @@ export function TxHistory({ address, limit = 20 }: { address: string | null; lim
               {r.tokenIds.length === 1 ? `#${r.tokenIds[0]}` : `${r.tokenIds.length} tokens`}
               {Number(r.value) > 0 && ` · ${r.value} ETH`}
             </span>
-            <span className="faint mono spacer" style={{ textAlign: "right", fontSize: 11 }}>{when}</span>
+            <span className="faint mono spacer" title={new Date(r.timestamp).toLocaleString()}
+              style={{ textAlign: "right", fontSize: 11 }}>{when}</span>
           </li>
         );
       })}
