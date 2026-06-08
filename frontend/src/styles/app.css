@@ -47,11 +47,11 @@
   background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-pop); padding: 6px; animation: floatUp .16s both; }
 .wallet-menu-addr { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 8px 10px 10px; font-size: 13px; color: var(--text-dim); }
+  padding: 8px 12px 10px; font-size: 13px; color: var(--text-dim); }
 .wallet-menu-mini { width: 30px; height: 30px; flex: none; border-radius: 8px; display: grid; place-items: center;
   background: var(--surface-3); border: 1px solid var(--line); color: var(--text-dim); transition: color .14s; }
 .wallet-menu-mini:hover { color: var(--text); }
-.wallet-menu-sep { height: 1px; background: var(--line); margin: 4px; }
+.wallet-menu-sep { height: 1px; background: var(--line); margin: 6px 12px; }
 .wallet-menu-item { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 44px; padding: 0 12px;
   border-radius: 10px; background: transparent; border: none; color: var(--text); text-decoration: none;
   font-family: var(--fs); font-weight: 600; font-size: 14px; cursor: pointer; transition: background .14s, color .14s; }
