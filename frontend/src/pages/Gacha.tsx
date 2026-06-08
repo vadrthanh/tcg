@@ -22,7 +22,7 @@ export function Gacha({ wallet }: Props) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [pulls, setPulls] = useState<Pull[]>([]);
   const [shown, setShown] = useState(0);
-  const [packPrice, setPackPrice] = useState("0.01");
+  const [packPrice, setPackPrice] = useState("0.0005");
   const [note, setNote]   = useState("REVEALING ON-CHAIN…");
   const connected = !!wallet.address && wallet.chainOk;
 
@@ -36,7 +36,7 @@ export function Gacha({ wallet }: Props) {
   }, [phase, pulls]);
 
   // Show the real on-chain pack price in the header from the start — otherwise
-  // the idle subtitle displays the "0.01" default until the first open() runs.
+  // the idle subtitle displays the "0.0005" default until the first open() runs.
   useEffect(() => {
     if (!wallet.provider) return;
     let alive = true;
