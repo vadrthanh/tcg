@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Contract, formatEther } from "ethers";
 import { Toaster, toast } from "react-hot-toast";
 import { useWallet } from "./hooks/useWallet";
+import { useTheme } from "./hooks/useTheme";
 import { ADDRESSES, NFT_ABI } from "./config/contracts";
 import { Icon, type IconName } from "./components/ui/Icon";
 import { Btn } from "./components/ui/Btn";
@@ -32,6 +33,7 @@ const ADMIN_NAV: { id: Page; label: string; icon: IconName } = { id: "admin", la
 
 export default function App() {
   const wallet = useWallet();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [page, setPage] = useState<Page>("home");
   const [modal, setModal] = useState<{ card: CardRow; owned: boolean } | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
@@ -106,6 +108,14 @@ export default function App() {
           </nav>
 
           <div className="topbar-r">
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
+            </button>
             {!wallet.address ? (
               <Btn kind="primary" icon="wallet" onClick={wallet.connect}>Connect</Btn>
             ) : !wallet.chainOk ? (

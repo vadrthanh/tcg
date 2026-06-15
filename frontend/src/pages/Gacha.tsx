@@ -10,9 +10,11 @@ import { CardArt } from "../components/ui/CardArt";
 import { RarityBadge } from "../components/ui/RarityBadge";
 import { Btn } from "../components/ui/Btn";
 import { Icon } from "../components/ui/Icon";
+import { Progress } from "../components/ui/Progress";
 import { PageHead } from "../components/PageHead";
 import { NotConnected } from "../components/NotConnected";
 import { txPending, txSuccess, txError } from "../components/TxToast";
+import { playLegendaryFanfare } from "../lib/sound";
 
 interface Props { wallet: WalletState; }
 type Phase = "idle" | "charging" | "revealing" | "done";
@@ -24,13 +26,19 @@ export function Gacha({ wallet }: Props) {
   const [shown, setShown] = useState(0);
   const [packPrice, setPackPrice] = useState("0.0005");
   const [note, setNote]   = useState("REVEALING ON-CHAIN…");
+  const [progress, setProgress] = useState(0); // 0–100 across the commit→reveal flow
+  const [step, setStep]   = useState(0);       // current step number, for "Step n of N"
   const connected = !!wallet.address && wallet.chainOk;
 
   // Staged reveal: flip one card every 380ms, then settle into the summary.
+  // A Legendary card fires the celebratory fanfare the moment it flips.
   // Cleanup clears timers so StrictMode's double-invoke can't stack them.
   useEffect(() => {
     if (phase !== "revealing") return;
-    const timers = pulls.map((_, i) => setTimeout(() => setShown(s => Math.max(s, i + 1)), 380 * (i + 1)));
+    const timers = pulls.map((p, i) => setTimeout(() => {
+      setShown(s => Math.max(s, i + 1));
+      if (p.rarity === "Legendary") playLegendaryFanfare();
+    }, 380 * (i + 1)));
     const end = setTimeout(() => setPhase("done"), 380 * (pulls.length + 1));
     return () => { timers.forEach(clearTimeout); clearTimeout(end); };
   }, [phase, pulls]);
@@ -54,9 +62,17 @@ export function Gacha({ wallet }: Props) {
     const provider = wallet.signer.provider!;
     const me = wallet.address;
 
-    setPulls([]); setShown(0); setNote("REVEALING ON-CHAIN…"); setPhase("charging");
+    // Drive the progress bar across the commit→reveal flow. `stage` sets the
+    // step number (for "Step n of 4"), a coarse percentage, and the status line.
+    const stage = (s: number, pct: number, text: string) => {
+      setStep(s); setProgress(pct); setNote(text);
+    };
+
+    setPulls([]); setShown(0); setProgress(0); setStep(0);
+    setNote("PREPARING YOUR BOOSTER…"); setPhase("charging");
     const toastId = txPending("Opening pack…");
     try {
+      stage(1, 6, "CHECKING NETWORK…");
       await assertChain(wallet.provider);
       const price = await gacha.packPrice();
       setPackPrice(formatEther(price));
@@ -91,22 +107,26 @@ export function Gacha({ wallet }: Props) {
           throw new Error(`Need ~${formatEther(needed)} ETH (pack + gas) but wallet holds ${formatEther(bal)} ETH. Top up from a Sepolia faucet.`);
         }
 
-        setNote("CONFIRM PAYMENT IN YOUR WALLET…");
+        stage(1, 18, "CONFIRM PAYMENT IN YOUR WALLET…");
         const cTx    = await gacha.commitPack({ value: price, gasLimit });
+        stage(1, 32, "CONFIRMING PAYMENT ON-CHAIN…");
         const cRcpt  = await cTx.wait();
         commitBlock  = cRcpt.blockNumber;
       }
 
       // revealPack() requires block.number > commitBlock — wait for the next block.
-      setNote("SECURING YOUR DRAW — WAITING FOR THE NEXT BLOCK…");
-      await waitForBlockAfter(provider, commitBlock);
+      // Ramp the bar from 45→68% over the ~12s block wait so it never looks stuck.
+      stage(2, 45, "SECURING YOUR DRAW — WAITING FOR THE NEXT BLOCK…");
+      await waitForBlockAfter(provider, commitBlock, 120_000,
+        frac => setProgress(45 + Math.round(frac * 23)));
 
       // Reveal: draws + mints 5 cards and emits PackOpened. Gas varies with the
       // randomized draw, so estimate and add a 50% buffer to avoid out-of-gas;
       // unused gas is refunded.
-      setNote("REVEALING YOUR CARDS ON-CHAIN…");
+      stage(3, 72, "REVEALING YOUR CARDS ON-CHAIN…");
       const gas    = await gacha.revealPack.estimateGas();
       const tx     = await gacha.revealPack({ gasLimit: gas + gas / 2n });
+      stage(3, 85, "MINTING YOUR CARDS ON-CHAIN…");
       const receipt = await tx.wait();
 
       const iface = gacha.interface;
@@ -127,6 +147,7 @@ export function Gacha({ wallet }: Props) {
         return { tokenId: Number(tid), rarity, card };
       }));
       setPulls(result);
+      stage(4, 100, "DONE!");
       txSuccess(toastId, "Pack opened!");
       setTimeout(() => setPhase("revealing"), 300);
 
@@ -189,6 +210,13 @@ export function Gacha({ wallet }: Props) {
                 <div className="pack-logo mono">POKÉDESK</div>
               </div>
               <div className="charge-text mono">{note}</div>
+              <div className="charge-progress">
+                <Progress value={progress} max={100} />
+                <div className="charge-progress-meta mono">
+                  <span>{step > 0 ? `STEP ${step} OF 4` : ""}</span>
+                  <span>{progress}%</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -198,8 +226,14 @@ export function Gacha({ wallet }: Props) {
               <div className="reveal-row">
                 {pulls.map((p, i) => (
                   <div key={i}
-                    className={`reveal-card${i < shown ? " flipped" : ""}${RARITY[p.rarity].rank >= 3 ? " reveal-hot" : ""}`}
+                    className={`reveal-card${i < shown ? " flipped" : ""}${RARITY[p.rarity].rank >= 3 ? " reveal-hot" : ""}${p.rarity === "Legendary" ? " reveal-legendary" : ""}`}
                     style={vars({ "--rc": RARITY[p.rarity].color }, { animationDelay: `${i * 80}ms` })}>
+                    {p.rarity === "Legendary" && i < shown && (
+                      <>
+                        <span className="legend-aura" />
+                        <span className="legend-sparkles" />
+                      </>
+                    )}
                     <div className="reveal-inner">
                       <div className="reveal-back"><span className="reveal-back-gem" /><span className="mono">POKÉDESK</span></div>
                       <div className="reveal-front">
@@ -263,14 +297,17 @@ async function waitForBlockAfter(
   provider: { getBlockNumber: () => Promise<number> },
   block: number,
   timeoutMs = 120_000,
+  onProgress?: (fraction: number) => void, // 0→1 of the expected ~12s block time
 ): Promise<number> {
   const start = Date.now();
+  const expectedMs = 12_000; // one Sepolia block; used only to animate the bar
   for (;;) {
     const n = await provider.getBlockNumber();
     if (n > block) return n;
     if (Date.now() - start > timeoutMs) {
       throw new Error("Timed out waiting for the reveal block. Your payment is safe — press Open Booster again to reveal your pack.");
     }
-    await new Promise(r => setTimeout(r, 3000));
+    onProgress?.(Math.min(1, (Date.now() - start) / expectedMs));
+    await new Promise(r => setTimeout(r, 1000));
   }
 }

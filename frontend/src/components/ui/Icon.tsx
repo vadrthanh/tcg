@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "home" | "bolt" | "grid" | "cards" | "store" | "coin" | "wallet" | "flame"
   | "spark" | "check" | "lock" | "arrow" | "refresh" | "plus" | "tag" | "trophy" | "chart"
-  | "copy" | "external" | "power" | "chevron";
+  | "copy" | "external" | "power" | "chevron" | "sun" | "moon";
 
 const PATHS: Record<IconName, ReactNode> = {
   home:   <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></>,
@@ -27,6 +27,8 @@ const PATHS: Record<IconName, ReactNode> = {
   external:<><path d="M14 4h6v6" /><path d="M20 4 11 13" /><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6" /></>,
   power:  <><path d="M12 3v9" /><path d="M7.6 6.6a7 7 0 1 0 8.8 0" /></>,
   chevron:<path d="m6 9 6 6 6-6" />,
+  sun:    <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4" /></>,
+  moon:   <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8Z" />,
 };
 
 export function Icon({ name, size = 18, stroke = 1.8 }: { name: IconName; size?: number; stroke?: number }) {
