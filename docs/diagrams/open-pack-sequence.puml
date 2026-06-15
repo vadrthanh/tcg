@@ -1,0 +1,75 @@
+@startuml open-pack
+title Open Pack — GachaPack commit-reveal flow
+
+actor "Buyer" as U
+participant "Gacha\n(frontend)" as FE
+participant "MetaMask\n(signer)" as MM
+participant "GachaPack" as GP
+participant "PaymentSplitter" as PS
+participant "PokemonCardNFT" as NFT
+participant "Indexer" as IDX
+database "SQLite\n(Backend API)" as DB
+
+== Pre-flight / recover commit ==
+U -> FE : click Open Booster
+FE -> MM : assertChain() — must be Sepolia
+FE -> GP : packPrice(), REVEAL_WINDOW(), commitBlockOf(me)
+FE -> MM : getBlockNumber()
+FE -> FE : hasLiveCommit =\ncommitBlock != 0 && tip <= commitBlock + window
+
+== Step 1 — commit (skipped if live commit exists) ==
+alt no live commit
+  FE -> GP : eth_estimateGas commitPack({value: price})
+  note right of FE : gasLimit = estimate * 1.2
+  FE -> MM : getBalance + getFeeData
+  FE -> FE : require bal >= price + gas*gasPrice
+  FE -> MM : commitPack({value: price, gasLimit})
+  MM -> U : prompt sign
+  U --> MM : approve
+  MM -> GP : tx commitPack() payable
+  activate GP
+  GP -> GP : check msg.value == packPrice\nno pending commit
+  GP -> GP : commitBlockOf[buyer] = block.number
+  GP -> PS : _routeRevenue: deposit{value}\n(platformTreasury, issuer)
+  note right of PS : revenue collected up front —\ncan't dodge a bad pull
+  PS --> GP : ok
+  GP -> GP : emit PackCommitted(buyer, block)
+  deactivate GP
+  GP --> MM : receipt
+  MM --> FE : commitBlock = receipt.blockNumber
+end
+
+== Wait for next block ==
+FE -> MM : poll getBlockNumber()\nuntil block.number > commitBlock
+note right of FE : ~12s/block, ~2min timeout\n("payment safe, press again")
+
+== Step 2 — reveal (draw + mint) ==
+FE -> GP : eth_estimateGas revealPack()
+FE -> MM : revealPack({gasLimit: est * 1.5})
+MM -> U : prompt sign
+U --> MM : approve
+MM -> GP : tx revealPack()
+activate GP
+GP -> GP : checks: commit exists, not too early,\nwithin REVEAL_WINDOW
+GP -> GP : seed = keccak256(blockhash(commitBlock), buyer)
+GP -> GP : delete commitBlockOf[buyer]  (CEI)
+loop 5 cards
+  GP -> GP : rand = keccak256(seed, i)\n_rollRarity → _drawFromInventory\n(falldown if tier sold out)
+  GP -> NFT : mintCard(buyer, cardId)
+  NFT --> GP : tokenId
+end
+GP -> GP : emit PackOpened(buyer, tokenIds, cardIds, rarities)
+deactivate GP
+GP --> MM : receipt
+MM --> FE : tx.wait() confirmed
+
+== Display + read replica ==
+FE -> FE : parse PackOpened log
+FE -> NFT : getCard(tokenId) x5
+NFT --> FE : card metadata
+FE -> U : reveal 5 pulled cards
+GP -->> IDX : PackOpened event
+IDX -> DB : write Transaction row\n(@@unique txHash,logIndex)
+FE -> DB : pollUntil API reflects new tokens
+
+@enduml
