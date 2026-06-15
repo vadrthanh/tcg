@@ -1,0 +1,41 @@
+@startuml claim
+title Claim Earnings — PaymentSplitter.claim() (pull-payment withdraw)
+
+actor "Recipient\n(seller / royalty / treasury)" as U
+participant "RoyaltyDashboard\n(frontend)" as FE
+participant "MetaMask\n(signer)" as MM
+participant "PaymentSplitter" as PS
+participant "Indexer" as IDX
+database "SQLite\n(Backend API)" as DB
+
+== Load balance (read direct from chain) ==
+U -> FE : open Royalty Dashboard
+FE -> PS : claimable(address)  [view, via provider]
+PS --> FE : balance
+FE -> U : show ◇ balance ETH\n(claim disabled if 0)
+
+== Claim ==
+U -> FE : click Claim
+FE -> MM : claim()
+MM -> U : prompt sign
+U --> MM : approve
+MM -> PS : tx claim()
+activate PS
+PS -> PS : amount = balances[msg.sender]\nif 0 revert NothingToClaim
+PS -> PS : balances[msg.sender] = 0  (CEI — zero before call)
+PS -> U : call{value: amount}("")
+note right of PS : nonReentrant guard\nrevert TransferFailed if !ok
+U --> PS : ok
+PS -> PS : emit Claimed(msg.sender, amount)
+deactivate PS
+PS --> MM : receipt
+MM --> FE : tx.wait() confirmed
+FE -> U : toast "Claimed!"
+
+== Refresh + read replica ==
+PS -->> IDX : Claimed event
+IDX -> DB : write Transaction row\n(@@unique txHash,logIndex)
+FE -> PS : claimable(address) again
+PS --> FE : 0
+
+@enduml
