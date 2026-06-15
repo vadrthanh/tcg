@@ -9,6 +9,10 @@
 
 > Buy packs, pull cards, trade them on-chain — all royalties enforced automatically.
 
+<p align="center">
+  <img src="docs/screenshot-home.png" alt="Pokédesk home — Pull. Collect. Trade the set." width="900">
+</p>
+
 ---
 
 ## Overview
@@ -44,6 +48,32 @@ This is the blockchain capstone project for IT4527E at university. It demonstrat
                     │  supply tracking    │      │   nonReentrant)      │
                     └─────────────────────┘      └─────────────────────┘
 ```
+
+---
+
+## Sequence Diagrams
+
+End-to-end flows across frontend, contracts, and the read-replica indexer. Sources live in [`docs/diagrams/`](docs/diagrams) — PlantUML `.puml` next to each rendered PNG.
+
+### Open a pack (commit-reveal)
+
+![Open pack sequence](docs/diagrams/open-pack-sequence.png)
+
+### Buy a listed card
+
+![Buy card sequence](docs/diagrams/buy-card-sequence.png)
+
+### List a card for sale
+
+![List card sequence](docs/diagrams/list-card-sequence.png)
+
+### Claim earnings (pull-payment)
+
+![Claim sequence](docs/diagrams/claim-sequence.png)
+
+### Deploy & wire contracts
+
+![Deploy sequence](docs/diagrams/deploy-sequence.png)
 
 ---
 
