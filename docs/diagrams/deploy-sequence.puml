@@ -1,0 +1,43 @@
+@startuml deploy
+title Deploy & Wire — scripts/deploy.ts (mandatory ordering)
+
+actor "Operator" as OP
+participant "deploy.ts\n(Hardhat)" as D
+participant "Sepolia" as CHAIN
+participant "data/pokemon-cards.json" as JSON
+participant "filesystem\n(addresses.json + .env)" as FS
+
+OP -> D : npm run deploy:sepolia
+D -> CHAIN : getSigners() → deployer
+
+== 1–4. Deploy contracts (order matters) ==
+D -> CHAIN : deploy PokemonCardNFT(deployer)
+CHAIN --> D : nftAddr
+D -> CHAIN : deploy PaymentSplitter(deployer)
+CHAIN --> D : splitterAddr
+D -> CHAIN : deploy GachaPack(nft, splitter, treasury, issuer, feeBps)
+CHAIN --> D : gachaAddr
+D -> CHAIN : deploy Marketplace(nft, splitter, treasury, feeBps)
+CHAIN --> D : marketAddr
+note right of D : GachaPack & Marketplace need\nNFT + Splitter addresses → deploy them first
+
+== 5. Wire permissions (skip = every openPack/buyCard reverts) ==
+D -> CHAIN : nft.grantRole(MINTER_ROLE, GachaPack)
+D -> CHAIN : splitter.grantRole(DEPOSITOR_ROLE, GachaPack)
+D -> CHAIN : splitter.grantRole(DEPOSITOR_ROLE, Marketplace)
+CHAIN --> D : roles granted
+
+== 6. Seed 40-card pool ==
+D -> JSON : read card templates
+JSON --> D : 40 cards
+loop batches
+  D -> CHAIN : nft.batchAddCards(...)
+  CHAIN --> D : seeded ✓
+end
+
+== 7. Persist addresses (integration seam) ==
+D -> FS : write deploy/addresses.json  (backend reads this)
+D -> FS : sync VITE_* → frontend/.env  (frontend reads env, not JSON)
+D -> OP : DEPLOYMENT COMPLETE\nnext: npm run verify:sepolia
+
+@enduml

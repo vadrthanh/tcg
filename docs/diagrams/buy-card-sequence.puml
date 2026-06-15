@@ -1,0 +1,55 @@
+@startuml buy-card
+title Buy Card — Marketplace.buyCard() interaction
+
+actor "Buyer" as U
+participant "MarketplacePage\n(frontend)" as FE
+participant "MetaMask\n(signer)" as MM
+participant "Marketplace" as MKT
+participant "PokemonCardNFT" as NFT
+participant "PaymentSplitter" as PS
+participant "Indexer" as IDX
+database "SQLite\n(Backend API)" as DB
+
+== Pre-flight (off-chain) ==
+U -> FE : click Buy(listing)
+FE -> MM : assertChain() — must be Sepolia
+FE -> MKT : eth_estimateGas buyCard(tokenId, {value})
+note right of FE : gasLimit = estimate * 1.2\n(CALL_EXCEPTION rethrown)
+FE -> MM : getBalance + getFeeData
+FE -> FE : require bal >= price + gas*gasPrice\nelse throw "top up faucet"
+
+== Submit tx ==
+FE -> MM : buyCard(tokenId, {value, gasLimit})
+MM -> U : prompt sign
+U --> MM : approve
+MM -> MKT : tx buyCard(tokenId) payable
+
+== On-chain (CEI, nonReentrant, whenNotPaused) ==
+activate MKT
+MKT -> MKT : 1. Checks: listing.price != 0\nmsg.value == price
+MKT -> MKT : 2. Effects: delete listings[tokenId]
+MKT -> NFT : 3. getRoyaltyReceivers(tokenId)
+NFT --> MKT : RoyaltyReceiver[]
+MKT -> MKT : compute platformFee + Σroyalty\nsellerProceeds = price - fee - royalty
+MKT -> PS : 4. deposit{value: price}(receivers, amts)
+note right of PS : pull-payment: credits\ntreasury + royalties + seller
+PS --> MKT : ok
+MKT -> NFT : 5. safeTransferFrom(seller, buyer, tokenId)
+note right of NFT : LAST external call —\nrevert here unwinds deposit
+NFT --> MKT : transferred
+MKT -> MKT : emit Purchased(...)
+deactivate MKT
+MKT --> MM : receipt
+MM --> FE : tx.wait() confirmed
+
+== Indexer catch-up (read replica) ==
+MKT -->> IDX : Purchased event
+IDX -> DB : write Transaction row\n(@@unique txHash,logIndex)
+FE -> DB : pollUntil listings(active)\nuntil tokenId gone
+DB --> FE : updated listings
+FE -> U : toast "Purchased!"
+
+== Later (pull-payment) ==
+note over PS : seller / royalty receivers\ncall claim() to withdraw
+
+@enduml
