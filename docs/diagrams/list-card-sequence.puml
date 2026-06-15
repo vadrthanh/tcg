@@ -1,0 +1,54 @@
+@startuml list-card
+title List Card — Marketplace.listCard() (with approval pre-step)
+
+actor "Seller" as U
+participant "Inventory\n(frontend)" as FE
+participant "MetaMask\n(signer)" as MM
+participant "PokemonCardNFT" as NFT
+participant "Marketplace" as MKT
+participant "Indexer" as IDX
+database "SQLite\n(Backend API)" as DB
+
+== Pre-flight ==
+U -> FE : enter price, click List
+FE -> MM : assertChain() — must be Sepolia
+FE -> NFT : isApprovedForAll(seller, Marketplace)
+NFT --> FE : bool
+
+== Approval (one-time, skipped if already approved) ==
+alt not approved
+  FE -> MM : setApprovalForAll(Marketplace, true)
+  MM -> U : prompt sign
+  U --> MM : approve
+  MM -> NFT : tx setApprovalForAll
+  NFT --> MM : receipt
+  MM --> FE : ap.wait() confirmed
+end
+
+== List ==
+FE -> MM : listCard(tokenId, parseEther(price))
+MM -> U : prompt sign
+U --> MM : approve
+MM -> MKT : tx listCard(tokenId, price)
+activate MKT
+MKT -> MKT : checks: price != 0
+MKT -> NFT : ownerOf(tokenId) == seller?
+MKT -> NFT : getApproved / isApprovedForAll == this?
+NFT --> MKT : ok
+MKT -> MKT : not already listed?
+MKT -> MKT : listings[tokenId] = {seller, price}
+MKT -> NFT : getCard(tokenId), tokenCardId(tokenId)
+NFT --> MKT : rarity, cardId
+MKT -> MKT : emit Listed(tokenId, seller, price, rarity, cardId)
+deactivate MKT
+MKT --> MM : receipt
+MM --> FE : tx.wait() confirmed
+
+== Read replica ==
+MKT -->> IDX : Listed event
+IDX -> DB : write listing row\n(@@unique txHash,logIndex)
+FE -> DB : pollUntil listings(active)\nuntil tokenId present
+DB --> FE : updated listings
+FE -> U : toast "Listed!"
+
+@enduml
